@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Airport Learning – OSM / MapLibre Prototyp</title>
+<title>Airport Learning</title>
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.2.0/dist/maplibre-gl.css">
 <style>
 :root{
@@ -66,6 +66,8 @@ button.primary{background:var(--blue);color:white;border-color:var(--blue)}
   background:rgba(18,26,34,.94);color:white;font-weight:700;font-size:14px;
   padding:6px 9px;border-radius:6px;white-space:nowrap
 }
+.shape-hit{cursor:pointer}
+
 @keyframes pulse{
   0%,100%{transform:scale(1)}
   50%{transform:scale(1.25)}
@@ -100,8 +102,8 @@ button.primary{background:var(--blue);color:white;border-color:var(--blue)}
 
   <div class="panel">
     <div class="info">
-      <strong id="prompt">Punkt anklicken → Name anzeigen · nochmals anklicken → wieder ausblenden</strong>
-      <span class="counter" id="counter">0 von 6 aufgedeckt</span>
+      <strong id="prompt">Objekt anklicken → Name anzeigen · nochmals anklicken → wieder ausblenden</strong>
+      <span class="counter" id="counter">0 Objekte</span>
     </div>
     <div id="map" aria-label="Interaktive Flughafenkarte"></div>
     <div class="footer">
@@ -116,15 +118,8 @@ import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.2.0/dist/maplibre-g
 
 const AIRPORT_CENTER = [8.55294, 47.45842];
 
-// Nur technische Demo-Punkte. Exakte Punkte sollen später aus dem Admin kommen.
-const POINTS = [
-  {name:'Demo 1', lng:8.5368, lat:47.4588},
-  {name:'Demo 2', lng:8.5449, lat:47.4624},
-  {name:'Demo 3', lng:8.5532, lat:47.4647},
-  {name:'Demo 4', lng:8.5612, lat:47.4606},
-  {name:'Demo 5', lng:8.5674, lat:47.4568},
-  {name:'Demo 6', lng:8.5498, lat:47.4526}
-];
+// Die Lernobjekte werden aus der Datei "lernobjekte.json" im gleichen GitHub-Ordner geladen.
+let OBJECTS = [];
 
 const map = new maplibregl.Map({
   container:'map',
@@ -143,29 +138,61 @@ const items = [];
 let labelsHidden = false;
 let randomIndex = null;
 
+const objectSourceId = 'learning-objects';
+const objectLineLayerId = 'learning-lines';
+const objectPolygonLayerId = 'learning-polygons';
+const objectPolygonOutlineLayerId = 'learning-polygons-outline';
+
 const counter = document.getElementById('counter');
 const prompt = document.getElementById('prompt');
 const labelsBtn = document.getElementById('labelsBtn');
 
 function updateCounter(){
-  counter.textContent = `${revealed.size} von ${POINTS.length} aufgedeckt`;
+  counter.textContent = `${revealed.size} von ${OBJECTS.length} aufgedeckt`;
 }
 
 function setRandom(index){
-  items.forEach((item,i)=>item.el.classList.toggle('random', i===index));
+  items.forEach((item,i)=>{
+    if(item && item.el){
+      item.el.classList.toggle('random', i===index);
+    }
+  });
+
   randomIndex = index;
+
   prompt.textContent = index === null
-    ? 'Punkt anklicken → Name anzeigen · nochmals anklicken → wieder ausblenden'
-    : 'Welcher Name gehört zum hervorgehobenen Punkt?';
+    ? 'Objekt anklicken → Name anzeigen · nochmals anklicken → wieder ausblenden'
+    : 'Welcher Name gehört zum ausgewählten Lernobjekt?';
+}
+
+function objectCenter(obj){
+  const g = obj.geometry;
+  if(!g) return AIRPORT_CENTER;
+
+  if(g.type === 'Point') return g.coordinates;
+
+  let coords = [];
+  if(g.type === 'LineString') coords = g.coordinates || [];
+  if(g.type === 'Polygon') coords = (g.coordinates && g.coordinates[0]) || [];
+  if(!coords.length) return AIRPORT_CENTER;
+
+  let x = 0, y = 0;
+  coords.forEach(c => { x += c[0]; y += c[1]; });
+  return [x / coords.length, y / coords.length];
 }
 
 function setRevealed(index, value){
   const item = items[index];
-  if(!item) return;
+  const obj = OBJECTS[index];
+  if(!item || !obj) return;
 
   if(value){
     revealed.add(index);
-    item.el.classList.add('revealed');
+
+    if(item.el){
+      item.el.classList.add('revealed');
+    }
+
     if(!item.popup){
       item.popup = new maplibregl.Popup({
         closeButton:false,
@@ -173,34 +200,44 @@ function setRevealed(index, value){
         offset:22,
         anchor:'bottom'
       })
-      .setLngLat([POINTS[index].lng, POINTS[index].lat])
-      .setHTML(`<div class="memory-label">${POINTS[index].name}</div>`)
+      .setLngLat(objectCenter(obj))
+      .setHTML(`<div class="memory-label">${obj.name}</div>`)
       .addTo(map);
     }
   }else{
     revealed.delete(index);
-    item.el.classList.remove('revealed');
+
+    if(item.el){
+      item.el.classList.remove('revealed');
+    }
+
     if(item.popup){
       item.popup.remove();
       item.popup = null;
     }
   }
+
   updateCounter();
 }
 
-function addMemoryMarkers(){
-  POINTS.forEach((p,index)=>{
+function addPointMarkers(){
+  OBJECTS.forEach((obj,index)=>{
+    if(obj.geometry?.type !== 'Point'){
+      items[index] = {el:null, marker:null, popup:null};
+      return;
+    }
+
     const el = document.createElement('button');
     el.type = 'button';
     el.className = 'memory-marker';
     el.setAttribute('aria-label', `Lernpunkt ${index+1}`);
 
     const marker = new maplibregl.Marker({element:el, anchor:'center'})
-      .setLngLat([p.lng,p.lat])
+      .setLngLat(obj.geometry.coordinates)
       .addTo(map);
 
     const item = {el, marker, popup:null};
-    items.push(item);
+    items[index] = item;
 
     el.addEventListener('click', (e)=>{
       e.stopPropagation();
@@ -208,6 +245,103 @@ function addMemoryMarkers(){
       if(randomIndex === index) setRandom(null);
     });
   });
+}
+
+function buildGeoJson(){
+  return {
+    type:'FeatureCollection',
+    features:OBJECTS
+      .filter(o=>o.geometry && o.geometry.type !== 'Point')
+      .map((o,index)=>({
+        type:'Feature',
+        properties:{
+          id:o.id || '',
+          name:o.name || '',
+          index:OBJECTS.indexOf(o),
+          type:o.type || ''
+        },
+        geometry:o.geometry
+      }))
+  };
+}
+
+function addShapeLayers(){
+  map.addSource(objectSourceId,{
+    type:'geojson',
+    data:buildGeoJson()
+  });
+
+  map.addLayer({
+    id:objectPolygonLayerId,
+    type:'fill',
+    source:objectSourceId,
+    filter:['==',['geometry-type'],'Polygon'],
+    paint:{
+      'fill-color':'#00549f',
+      'fill-opacity':0.18
+    }
+  });
+
+  map.addLayer({
+    id:objectPolygonOutlineLayerId,
+    type:'line',
+    source:objectSourceId,
+    filter:['==',['geometry-type'],'Polygon'],
+    paint:{
+      'line-color':'#00549f',
+      'line-width':4
+    }
+  });
+
+  map.addLayer({
+    id:objectLineLayerId,
+    type:'line',
+    source:objectSourceId,
+    filter:['==',['geometry-type'],'LineString'],
+    paint:{
+      'line-color':'#00549f',
+      'line-width':6
+    }
+  });
+
+  function clickShape(e){
+    const feature = e.features?.[0];
+    if(!feature) return;
+    const index = Number(feature.properties.index);
+    if(!Number.isInteger(index)) return;
+
+    setRevealed(index, !revealed.has(index));
+    if(randomIndex === index) setRandom(null);
+  }
+
+  map.on('click', objectPolygonLayerId, clickShape);
+  map.on('click', objectPolygonOutlineLayerId, clickShape);
+  map.on('click', objectLineLayerId, clickShape);
+
+  [objectPolygonLayerId, objectPolygonOutlineLayerId, objectLineLayerId].forEach(id=>{
+    map.on('mouseenter',id,()=>map.getCanvas().style.cursor='pointer');
+    map.on('mouseleave',id,()=>map.getCanvas().style.cursor='');
+  });
+}
+
+async function loadObjects(){
+  const response = await fetch('./lernobjekte.json', {cache:'no-store'});
+  if(!response.ok){
+    throw new Error(`lernobjekte.json konnte nicht geladen werden (${response.status})`);
+  }
+
+  const data = await response.json();
+  OBJECTS = Array.isArray(data) ? data : (Array.isArray(data.objects) ? data.objects : []);
+
+  // Nur aktive Objekte, falls das Feld vorhanden ist.
+  OBJECTS = OBJECTS.filter(o => o.active !== false && o.geometry);
+
+  items.length = 0;
+  OBJECTS.forEach(()=>items.push({el:null,marker:null,popup:null}));
+
+  addPointMarkers();
+  addShapeLayers();
+  updateCounter();
 }
 
 function setLabelVisibility(hidden){
@@ -225,9 +359,15 @@ function setLabelVisibility(hidden){
   labelsBtn.textContent = hidden ? 'Beschriftungen ein' : 'Beschriftungen aus';
 }
 
-map.on('load', ()=>{
-  addMemoryMarkers();
-  updateCounter();
+map.on('load', async ()=>{
+  try{
+    await loadObjects();
+    prompt.textContent = 'Objekt anklicken → Name anzeigen · nochmals anklicken → wieder ausblenden';
+  }catch(err){
+    console.error(err);
+    prompt.textContent = 'Fehler: lernobjekte.json konnte nicht geladen werden.';
+    counter.textContent = '0 Objekte';
+  }
 });
 
 document.getElementById('fitBtn').addEventListener('click', ()=>{
@@ -239,22 +379,26 @@ labelsBtn.addEventListener('click', ()=>{
 });
 
 document.getElementById('hideAll').addEventListener('click', ()=>{
-  POINTS.forEach((_,i)=>setRevealed(i,false));
+  OBJECTS.forEach((_,i)=>setRevealed(i,false));
   setRandom(null);
 });
 
 document.getElementById('showAll').addEventListener('click', ()=>{
-  POINTS.forEach((_,i)=>setRevealed(i,true));
+  OBJECTS.forEach((_,i)=>setRevealed(i,true));
   setRandom(null);
 });
 
 document.getElementById('randomBtn').addEventListener('click', ()=>{
-  const hidden = POINTS.map((_,i)=>i).filter(i=>!revealed.has(i));
-  const pool = hidden.length ? hidden : POINTS.map((_,i)=>i);
+  if(!OBJECTS.length) return;
+
+  const hidden = OBJECTS.map((_,i)=>i).filter(i=>!revealed.has(i));
+  const pool = hidden.length ? hidden : OBJECTS.map((_,i)=>i);
   const choice = pool[Math.floor(Math.random()*pool.length)];
+
   setRandom(choice);
+
   map.easeTo({
-    center:[POINTS[choice].lng, POINTS[choice].lat],
+    center:objectCenter(OBJECTS[choice]),
     zoom:Math.max(map.getZoom(), 15),
     duration:600
   });
