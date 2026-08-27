@@ -1,0 +1,255 @@
+
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Airport Learning – OSM / MapLibre Prototyp</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.2.0/dist/maplibre-gl.css">
+<style>
+:root{
+  --blue:#00549f;
+  --ink:#15202b;
+  --muted:#697581;
+  --line:#d8dee5;
+  --bg:#f4f6f8;
+}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink);overflow:hidden}
+.app{height:100%;display:flex;flex-direction:column;padding:10px 12px}
+.top{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  margin-bottom:8px;flex:0 0 auto
+}
+.title{font-size:21px;font-weight:700}
+.sub{font-size:12px;color:var(--muted);margin-top:2px}
+.actions{display:flex;gap:7px;flex-wrap:wrap}
+button{
+  min-height:42px;padding:9px 12px;border:1px solid var(--line);background:white;color:var(--ink);
+  border-radius:8px;font:inherit;cursor:pointer
+}
+button.primary{background:var(--blue);color:white;border-color:var(--blue)}
+.panel{
+  flex:1;min-height:0;background:white;border:1px solid var(--line);border-radius:10px;overflow:hidden;
+  display:flex;flex-direction:column
+}
+.info{
+  flex:0 0 auto;padding:8px 12px;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap
+}
+#map{flex:1;min-height:0}
+.counter{font-size:13px;color:var(--muted)}
+.footer{
+  flex:0 0 auto;padding:6px 10px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)
+}
+.memory-marker{
+  width:30px;height:30px;border-radius:50%;
+  background:white;border:4px solid var(--blue);
+  box-shadow:0 1px 3px rgba(0,0,0,.22);
+  cursor:pointer;
+}
+.memory-marker.revealed{background:var(--blue)}
+.memory-marker.random{
+  animation:pulse 1s infinite;
+  box-shadow:0 0 0 8px rgba(0,84,159,.15)
+}
+.memory-label{
+  background:rgba(18,26,34,.94);color:white;font-weight:700;font-size:14px;
+  padding:6px 9px;border-radius:6px;white-space:nowrap
+}
+@keyframes pulse{
+  0%,100%{transform:scale(1)}
+  50%{transform:scale(1.25)}
+}
+.maplibregl-popup-content{
+  padding:0!important;background:transparent!important;box-shadow:none!important
+}
+.maplibregl-popup-tip{display:none}
+.maplibregl-ctrl-attrib{font-size:11px}
+@media(max-width:700px){
+  .app{padding:6px}
+  .title{font-size:18px}
+  .panel{min-height:650px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div>
+      <div class="title">Airport Learning – OSM-Test</div>
+      <div class="sub">MapLibre + OpenStreetMap-Daten · zoomen und verschieben wie bei einer normalen Onlinekarte</div>
+    </div>
+    <div class="actions">
+      <button id="fitBtn">Flughafen</button>
+      <button id="labelsBtn">Beschriftungen aus</button>
+      <button id="hideAll">Alle ausblenden</button>
+      <button id="showAll">Alle anzeigen</button>
+      <button class="primary" id="randomBtn">Zufälligen Punkt wählen</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="info">
+      <strong id="prompt">Punkt anklicken → Name anzeigen · nochmals anklicken → wieder ausblenden</strong>
+      <span class="counter" id="counter">0 von 6 aufgedeckt</span>
+    </div>
+    <div id="map" aria-label="Interaktive Flughafenkarte"></div>
+    <div class="footer">
+      Demo: Die Markerpositionen sind nur für den technischen Test gesetzt und nicht als fachlich geprüfte Rollwegpositionen gedacht.
+      Kartendaten © OpenStreetMap-Mitwirkende.
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.2.0/dist/maplibre-gl.mjs';
+
+const AIRPORT_CENTER = [8.55294, 47.45842];
+
+// Nur technische Demo-Punkte. Exakte Punkte sollen später aus dem Admin kommen.
+const POINTS = [
+  {name:'Demo 1', lng:8.5368, lat:47.4588},
+  {name:'Demo 2', lng:8.5449, lat:47.4624},
+  {name:'Demo 3', lng:8.5532, lat:47.4647},
+  {name:'Demo 4', lng:8.5612, lat:47.4606},
+  {name:'Demo 5', lng:8.5674, lat:47.4568},
+  {name:'Demo 6', lng:8.5498, lat:47.4526}
+];
+
+const map = new maplibregl.Map({
+  container:'map',
+  style:'https://tiles.openfreemap.org/styles/bright',
+  center:AIRPORT_CENTER,
+  zoom:13.6,
+  minZoom:11,
+  maxZoom:19,
+  attributionControl:true
+});
+
+map.addControl(new maplibregl.NavigationControl({showCompass:false}), 'bottom-right');
+
+const revealed = new Set();
+const items = [];
+let labelsHidden = false;
+let randomIndex = null;
+
+const counter = document.getElementById('counter');
+const prompt = document.getElementById('prompt');
+const labelsBtn = document.getElementById('labelsBtn');
+
+function updateCounter(){
+  counter.textContent = `${revealed.size} von ${POINTS.length} aufgedeckt`;
+}
+
+function setRandom(index){
+  items.forEach((item,i)=>item.el.classList.toggle('random', i===index));
+  randomIndex = index;
+  prompt.textContent = index === null
+    ? 'Punkt anklicken → Name anzeigen · nochmals anklicken → wieder ausblenden'
+    : 'Welcher Name gehört zum hervorgehobenen Punkt?';
+}
+
+function setRevealed(index, value){
+  const item = items[index];
+  if(!item) return;
+
+  if(value){
+    revealed.add(index);
+    item.el.classList.add('revealed');
+    if(!item.popup){
+      item.popup = new maplibregl.Popup({
+        closeButton:false,
+        closeOnClick:false,
+        offset:22,
+        anchor:'bottom'
+      })
+      .setLngLat([POINTS[index].lng, POINTS[index].lat])
+      .setHTML(`<div class="memory-label">${POINTS[index].name}</div>`)
+      .addTo(map);
+    }
+  }else{
+    revealed.delete(index);
+    item.el.classList.remove('revealed');
+    if(item.popup){
+      item.popup.remove();
+      item.popup = null;
+    }
+  }
+  updateCounter();
+}
+
+function addMemoryMarkers(){
+  POINTS.forEach((p,index)=>{
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'memory-marker';
+    el.setAttribute('aria-label', `Lernpunkt ${index+1}`);
+
+    const marker = new maplibregl.Marker({element:el, anchor:'center'})
+      .setLngLat([p.lng,p.lat])
+      .addTo(map);
+
+    const item = {el, marker, popup:null};
+    items.push(item);
+
+    el.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      setRevealed(index, !revealed.has(index));
+      if(randomIndex === index) setRandom(null);
+    });
+  });
+}
+
+function setLabelVisibility(hidden){
+  const style = map.getStyle();
+  if(!style || !style.layers) return;
+
+  style.layers.forEach(layer=>{
+    if(layer.type === 'symbol'){
+      try{
+        map.setLayoutProperty(layer.id, 'visibility', hidden ? 'none' : 'visible');
+      }catch(_){}
+    }
+  });
+  labelsHidden = hidden;
+  labelsBtn.textContent = hidden ? 'Beschriftungen ein' : 'Beschriftungen aus';
+}
+
+map.on('load', ()=>{
+  addMemoryMarkers();
+  updateCounter();
+});
+
+document.getElementById('fitBtn').addEventListener('click', ()=>{
+  map.easeTo({center:AIRPORT_CENTER, zoom:13.6, duration:500});
+});
+
+labelsBtn.addEventListener('click', ()=>{
+  setLabelVisibility(!labelsHidden);
+});
+
+document.getElementById('hideAll').addEventListener('click', ()=>{
+  POINTS.forEach((_,i)=>setRevealed(i,false));
+  setRandom(null);
+});
+
+document.getElementById('showAll').addEventListener('click', ()=>{
+  POINTS.forEach((_,i)=>setRevealed(i,true));
+  setRandom(null);
+});
+
+document.getElementById('randomBtn').addEventListener('click', ()=>{
+  const hidden = POINTS.map((_,i)=>i).filter(i=>!revealed.has(i));
+  const pool = hidden.length ? hidden : POINTS.map((_,i)=>i);
+  const choice = pool[Math.floor(Math.random()*pool.length)];
+  setRandom(choice);
+  map.easeTo({
+    center:[POINTS[choice].lng, POINTS[choice].lat],
+    zoom:Math.max(map.getZoom(), 15),
+    duration:600
+  });
+});
+</script>
+</body>
+</html>
