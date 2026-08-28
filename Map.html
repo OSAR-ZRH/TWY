@@ -164,7 +164,7 @@ body.notice-open .app{
   <div class="start-notice-card">
     <h2 id="startNoticeTitle">Hinweis zur Lernkarte</h2>
     <p>Diese Karte dient ausschliesslich dem Lernen der Bezeichnungen von Rollwegen, Standplätzen und Sektoren.</p>
-    <p>Die eingezeichneten Standplatz- und Sektorflächen sind schematisch dargestellt und nicht zwingend lagegenau. Sie dienen lediglich der Orientierung innerhalb der Lernkarte. Auch die Kartengrundlage kann vom aktuellen betrieblichen Zustand abweichen.</p>
+    <p>Die eingezeichneten Standplatz- und Sektorflächen sind schematisch dargestellt und nicht lagegenau. Sie dienen lediglich der Orientierung innerhalb der Lernkarte. Auch die Kartengrundlage kann vom aktuellen betrieblichen Zustand abweichen.</p>
     <p>Für den operativen Einsatz sind ausschliesslich die offiziellen und aktuellen Flughafenunterlagen massgebend.</p>
     <div class="notice-actions">
       <button id="acceptNotice" class="primary" type="button">Verstanden – Lernkarte öffnen</button>
@@ -185,6 +185,17 @@ body.notice-open .app{
       <button id="showAll">Alle anzeigen</button>
       <button id="quizStartBtn" class="primary">Quiz starten</button>
     </div>
+  </div>
+
+
+  <div id="quizBar" class="quizbar hidden">
+    <div>
+      <div id="quizTarget" class="quiz-target">Finde: –</div>
+      <div id="quizMeta" class="quiz-meta"></div>
+    </div>
+    <div id="quizFeedback" class="quiz-feedback"></div>
+    <button id="quizNextBtn" class="primary quiz-next" type="button" disabled>Nächste Frage</button>
+    <button id="quizStopBtn" type="button">Quiz beenden</button>
   </div>
 
   <div class="panel">
@@ -396,11 +407,20 @@ function showQuizQuestion(){
 
 function startQuiz(){
   const names = buildQuizNames();
+
   if(!names.length){
     alert('Es sind noch keine Lernobjekte für ein Quiz vorhanden.');
     return;
   }
 
+  if(!quizBar || !quizTarget || !quizMeta || !quizFeedback || !quizNextBtn || !quizStopBtn){
+    console.error('Quiz-Oberfläche konnte nicht initialisiert werden.');
+    alert('Der Quizmodus konnte nicht gestartet werden.');
+    appMode = 'learn';
+    return;
+  }
+
+  // Erst in den Quizmodus wechseln, wenn die Oberfläche vollständig vorhanden ist.
   appMode = 'quiz';
   quizNames = names;
   quizOrder = shuffleArray(names);
@@ -784,15 +804,21 @@ map.on('load', async ()=>{
 });
 
 
-quizStartBtn.addEventListener('click', startQuiz);
+if(quizStartBtn){
+  quizStartBtn.addEventListener('click', startQuiz);
+}
 
-quizNextBtn.addEventListener('click', ()=>{
-  if(!quizAnswered) return;
-  quizPos++;
-  showQuizQuestion();
-});
+if(quizNextBtn){
+  quizNextBtn.addEventListener('click', ()=>{
+    if(!quizAnswered) return;
+    quizPos++;
+    showQuizQuestion();
+  });
+}
 
-quizStopBtn.addEventListener('click', stopQuiz);
+if(quizStopBtn){
+  quizStopBtn.addEventListener('click', stopQuiz);
+}
 
 
 document.getElementById('fitBtn').addEventListener('click', ()=>{
