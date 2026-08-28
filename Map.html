@@ -58,18 +58,12 @@ button.primary{background:var(--blue);color:white;border-color:var(--blue)}
   flex:0 0 32px;
 }
 .memory-marker.revealed{background:var(--blue)}
-.memory-marker.random{
-  animation:pulse 1s infinite;
-  box-shadow:0 0 0 8px rgba(0,84,159,.15)
-}
 .memory-label{
   background:rgba(18,26,34,.94);color:white;font-weight:700;font-size:14px;
   padding:6px 9px;border-radius:6px;white-space:nowrap
 }
 .shape-hit{cursor:pointer}
 
-@keyframes pulse{
-  0%,100%{transform:scale(1)}
   50%{transform:scale(1.25)}
 }
 .maplibregl-popup-content{
@@ -96,7 +90,6 @@ button.primary{background:var(--blue);color:white;border-color:var(--blue)}
       <button id="labelsBtn">Beschriftungen aus</button>
       <button id="hideAll">Alle ausblenden</button>
       <button id="showAll">Alle anzeigen</button>
-      <button class="primary" id="randomBtn">Zufälligen Punkt wählen</button>
     </div>
   </div>
 
@@ -107,7 +100,7 @@ button.primary{background:var(--blue);color:white;border-color:var(--blue)}
     </div>
     <div id="map" aria-label="Interaktive Flughafenkarte"></div>
     <div class="footer">
-      Demo: Die Markerpositionen sind nur für den technischen Test gesetzt und nicht als fachlich geprüfte Rollwegpositionen gedacht.
+      Rote schraffierte Flächen kennzeichnen temporäre Sperrungen/Baustellen und bleiben dauerhaft sichtbar.
       Kartendaten © OpenStreetMap-Mitwirkende.
     </div>
   </div>
@@ -136,33 +129,28 @@ map.addControl(new maplibregl.NavigationControl({showCompass:false}), 'bottom-ri
 const revealed = new Set();
 const items = [];
 let labelsHidden = false;
-let randomIndex = null;
 
 const objectSourceId = 'learning-objects';
 const objectLineLayerId = 'learning-lines';
 const objectPolygonLayerId = 'learning-polygons';
 const objectPolygonOutlineLayerId = 'learning-polygons-outline';
+const closureFillLayerId = 'closure-fill';
+const closurePatternLayerId = 'closure-pattern';
+const closureOutlineLayerId = 'closure-outline';
+const closureLabelLayerId = 'closure-label';
 
 const counter = document.getElementById('counter');
 const prompt = document.getElementById('prompt');
 const labelsBtn = document.getElementById('labelsBtn');
 
-function updateCounter(){
-  counter.textContent = `${revealed.size} von ${OBJECTS.length} aufgedeckt`;
+function learningObjectIndices(){
+  return OBJECTS.map((o,i)=>({o,i})).filter(x=>x.o.type !== 'closure').map(x=>x.i);
 }
 
-function setRandom(index){
-  items.forEach((item,i)=>{
-    if(item && item.el){
-      item.el.classList.toggle('random', i===index);
-    }
-  });
-
-  randomIndex = index;
-
-  prompt.textContent = index === null
-    ? 'Objekt anklicken → Name anzeigen · nochmals anklicken → wieder ausblenden'
-    : 'Welcher Name gehört zum ausgewählten Lernobjekt?';
+function updateCounter(){
+  const learning = learningObjectIndices();
+  const shown = learning.filter(i=>revealed.has(i)).length;
+  counter.textContent = `${shown} von ${learning.length} aufgedeckt`;
 }
 
 function objectCenter(obj){
@@ -184,7 +172,7 @@ function objectCenter(obj){
 function setRevealed(index, value){
   const item = items[index];
   const obj = OBJECTS[index];
-  if(!item || !obj) return;
+  if(!item || !obj || obj.type === 'closure') return;
 
   if(value){
     revealed.add(index);
@@ -222,7 +210,7 @@ function setRevealed(index, value){
 
 function addPointMarkers(){
   OBJECTS.forEach((obj,index)=>{
-    if(obj.geometry?.type !== 'Point'){
+    if(obj.type === 'closure' || obj.geometry?.type !== 'Point'){
       items[index] = {el:null, marker:null, popup:null};
       return;
     }
@@ -242,7 +230,6 @@ function addPointMarkers(){
     el.addEventListener('click', (e)=>{
       e.stopPropagation();
       setRevealed(index, !revealed.has(index));
-      if(randomIndex === index) setRandom(null);
     });
   });
 }
@@ -271,11 +258,15 @@ function addShapeLayers(){
     data:buildGeoJson()
   });
 
+  // Normale Lernzonen
   map.addLayer({
     id:objectPolygonLayerId,
     type:'fill',
     source:objectSourceId,
-    filter:['==',['geometry-type'],'Polygon'],
+    filter:['all',
+      ['==',['geometry-type'],'Polygon'],
+      ['!=',['get','type'],'closure']
+    ],
     paint:{
       'fill-color':'#00549f',
       'fill-opacity':0.18
@@ -286,13 +277,17 @@ function addShapeLayers(){
     id:objectPolygonOutlineLayerId,
     type:'line',
     source:objectSourceId,
-    filter:['==',['geometry-type'],'Polygon'],
+    filter:['all',
+      ['==',['geometry-type'],'Polygon'],
+      ['!=',['get','type'],'closure']
+    ],
     paint:{
       'line-color':'#00549f',
       'line-width':4
     }
   });
 
+  // Normale Lernlinien
   map.addLayer({
     id:objectLineLayerId,
     type:'line',
@@ -304,14 +299,87 @@ function addShapeLayers(){
     }
   });
 
+  // Rote Sperrflächen / Baustellen
+  map.addLayer({
+    id:closureFillLayerId,
+    type:'fill',
+    source:objectSourceId,
+    filter:['==',['get','type'],'closure'],
+    paint:{
+      'fill-color':'#d32f2f',
+      'fill-opacity':0.22
+    }
+  });
+
+  // Diagonale Schraffur als Symbolmuster
+  const size = 24;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,size,size);
+  ctx.strokeStyle = '#c62828';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(-6, size);
+  ctx.lineTo(size, -6);
+  ctx.moveTo(6, size + 6);
+  ctx.lineTo(size + 6, 6);
+  ctx.stroke();
+
+  if(!map.hasImage('closure-hatch')){
+    map.addImage('closure-hatch', ctx.getImageData(0,0,size,size), {pixelRatio:2});
+  }
+
+  map.addLayer({
+    id:closurePatternLayerId,
+    type:'fill',
+    source:objectSourceId,
+    filter:['==',['get','type'],'closure'],
+    paint:{
+      'fill-pattern':'closure-hatch',
+      'fill-opacity':0.90
+    }
+  });
+
+  map.addLayer({
+    id:closureOutlineLayerId,
+    type:'line',
+    source:objectSourceId,
+    filter:['==',['get','type'],'closure'],
+    paint:{
+      'line-color':'#b71c1c',
+      'line-width':4
+    }
+  });
+
+  map.addLayer({
+    id:closureLabelLayerId,
+    type:'symbol',
+    source:objectSourceId,
+    filter:['==',['get','type'],'closure'],
+    layout:{
+      'text-field':['coalesce',['get','name'],'Baustelle'],
+      'text-size':15,
+      'text-font':['Noto Sans Bold'],
+      'text-allow-overlap':true,
+      'text-ignore-placement':true
+    },
+    paint:{
+      'text-color':'#b71c1c',
+      'text-halo-color':'#ffffff',
+      'text-halo-width':2
+    }
+  });
+
   function clickShape(e){
     const feature = e.features?.[0];
     if(!feature) return;
+    if(feature.properties.type === 'closure') return;
+
     const index = Number(feature.properties.index);
     if(!Number.isInteger(index)) return;
-
     setRevealed(index, !revealed.has(index));
-    if(randomIndex === index) setRandom(null);
   }
 
   map.on('click', objectPolygonLayerId, clickShape);
@@ -379,30 +447,13 @@ labelsBtn.addEventListener('click', ()=>{
 });
 
 document.getElementById('hideAll').addEventListener('click', ()=>{
-  OBJECTS.forEach((_,i)=>setRevealed(i,false));
-  setRandom(null);
+  learningObjectIndices().forEach(i=>setRevealed(i,false));
 });
 
 document.getElementById('showAll').addEventListener('click', ()=>{
-  OBJECTS.forEach((_,i)=>setRevealed(i,true));
-  setRandom(null);
+  learningObjectIndices().forEach(i=>setRevealed(i,true));
 });
 
-document.getElementById('randomBtn').addEventListener('click', ()=>{
-  if(!OBJECTS.length) return;
-
-  const hidden = OBJECTS.map((_,i)=>i).filter(i=>!revealed.has(i));
-  const pool = hidden.length ? hidden : OBJECTS.map((_,i)=>i);
-  const choice = pool[Math.floor(Math.random()*pool.length)];
-
-  setRandom(choice);
-
-  map.easeTo({
-    center:objectCenter(OBJECTS[choice]),
-    zoom:Math.max(map.getZoom(), 15),
-    duration:600
-  });
-});
 </script>
 </body>
 </html>
