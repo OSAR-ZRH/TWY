@@ -453,6 +453,7 @@ function updateQuizMeta(){
 function showQuizQuestion(){
   clearQuizHighlights();
   quizSummary.classList.add('hidden');
+  quizNextBtn.style.display = '';
   quizStopBtn.textContent = 'Quiz beenden';
 
   if(quizPos >= quizOrder.length){
@@ -494,6 +495,7 @@ function showQuizResult(reason='finished'){
   `;
 
   quizNextBtn.disabled = true;
+  quizNextBtn.style.display = 'none';
   quizStopBtn.textContent = 'Zurück zum Lernmodus';
   quizStartBtn.textContent = 'Neues Quiz starten';
   appMode = 'result';
@@ -537,6 +539,7 @@ function stopQuiz(){
   quizSummary.classList.add('hidden');
   quizFeedback.textContent = '';
   quizNextBtn.disabled = true;
+  quizNextBtn.style.display = '';
   quizStopBtn.textContent = 'Quiz beenden';
   quizStartBtn.textContent = 'Quiz starten';
   prompt.textContent = 'Objekt anklicken → Name anzeigen · nochmals anklicken → wieder ausblenden';
