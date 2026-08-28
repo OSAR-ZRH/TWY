@@ -161,18 +161,90 @@ body.notice-open .app{
 .quiz-next{margin-left:0}
 .quiz-summary{
   grid-column:1 / -1;
-  padding:12px 14px;
+  padding:18px;
   border:1px solid var(--line);
-  border-radius:9px;
+  border-radius:12px;
   background:#f8fafb;
   font-size:14px;
   line-height:1.45;
 }
 .quiz-summary.hidden{display:none}
-.quiz-summary strong{
+
+.quiz-result-grid{
+  display:grid;
+  grid-template-columns:150px minmax(0,1fr);
+  gap:18px;
+  align-items:center;
+}
+
+.quiz-score{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  width:150px;
+  height:150px;
+  border-radius:50%;
+  border:10px solid var(--blue);
+  background:#fff;
+}
+
+.quiz-score-value{
+  font-size:38px;
+  line-height:1;
+  font-weight:700;
+  color:var(--blue);
+}
+
+.quiz-score-label{
+  margin-top:6px;
+  font-size:12px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  color:var(--muted);
+}
+
+.quiz-result-main strong{
   display:block;
-  font-size:18px;
-  margin-bottom:4px;
+  font-size:22px;
+  margin-bottom:8px;
+}
+
+.quiz-progress{
+  height:14px;
+  border-radius:999px;
+  background:#e5e9ee;
+  overflow:hidden;
+  margin:12px 0 8px;
+}
+
+.quiz-progress-fill{
+  height:100%;
+  width:0;
+  background:var(--blue);
+  border-radius:999px;
+}
+
+.quiz-result-note{
+  color:var(--muted);
+  font-size:14px;
+}
+
+@media(max-width:560px){
+  .quiz-result-grid{
+    grid-template-columns:1fr;
+  }
+
+  .quiz-score{
+    width:130px;
+    height:130px;
+    border-width:8px;
+  }
+
+  .quiz-score-value{
+    font-size:34px;
+  }
 }
 .quiz-hit-correct{
   box-shadow:0 0 0 5px rgba(20,125,63,.28);
@@ -487,11 +559,29 @@ function showQuizResult(reason='finished'){
   quizFeedback.className = 'quiz-feedback';
 
   quizSummary.classList.remove('hidden');
-  quizSummary.innerHTML = `
-    <strong>${firstTry} von ${attempted} beim ersten Versuch richtig</strong>
-    ${attempted > 0
-      ? `${rate}% Erstversuchsquote · ${attempted} Frage${attempted === 1 ? '' : 'n'} beantwortet`
-      : 'Noch keine Frage beantwortet.'}
+  quizSummary.innerHTML = attempted > 0 ? `
+    <div class="quiz-result-grid">
+      <div class="quiz-score" aria-label="${rate} Prozent Erstversuchsquote">
+        <div class="quiz-score-value">${rate}%</div>
+        <div class="quiz-score-label">Erstversuch</div>
+      </div>
+
+      <div class="quiz-result-main">
+        <strong>${firstTry} von ${attempted} beim ersten Versuch richtig</strong>
+
+        <div class="quiz-progress" aria-hidden="true">
+          <div class="quiz-progress-fill" style="width:${rate}%"></div>
+        </div>
+
+        <div class="quiz-result-note">
+          ${attempted} Frage${attempted === 1 ? '' : 'n'} beantwortet
+        </div>
+      </div>
+    </div>
+  ` : `
+    <div class="quiz-result-main">
+      <strong>Noch keine Frage beantwortet.</strong>
+    </div>
   `;
 
   quizNextBtn.disabled = true;
