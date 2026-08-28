@@ -560,22 +560,27 @@ function showQuizResult(reason='finished'){
   quizFeedback.className = 'quiz-feedback';
 
   quizSummary.classList.remove('hidden');
+  const neededRetry = attempted - firstTry;
+
   quizSummary.innerHTML = attempted > 0 ? `
     <div class="quiz-result-grid">
-      <div class="quiz-score" aria-label="${rate} Prozent Erstversuchsquote">
+      <div class="quiz-score" aria-label="${rate} Prozent ohne Fehlversuch gelöst">
         <div class="quiz-score-value">${rate}%</div>
-        <div class="quiz-score-label">Erstversuch</div>
+        <div class="quiz-score-label">direkt richtig</div>
       </div>
 
       <div class="quiz-result-main">
-        <strong>${firstTry} von ${attempted} beim ersten Versuch richtig</strong>
+        <strong>${attempted} Frage${attempted === 1 ? '' : 'n'} beantwortet</strong>
 
         <div class="quiz-progress" aria-hidden="true">
           <div class="quiz-progress-fill" style="width:${rate}%"></div>
         </div>
 
         <div class="quiz-result-note">
-          ${attempted} Frage${attempted === 1 ? '' : 'n'} beantwortet
+          ${firstTry} direkt richtig
+          ${neededRetry > 0
+            ? ` · ${neededRetry} nach einem oder mehreren Fehlversuchen gelöst`
+            : ' · keine Fehlversuche'}
         </div>
       </div>
     </div>
