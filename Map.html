@@ -108,6 +108,49 @@ body.notice-open .app{
   user-select:none;
 }
 
+
+.quizbar{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  padding:10px 12px;
+  border-bottom:1px solid var(--line);
+  background:#fff;
+}
+.quizbar.hidden{display:none}
+.quiz-target{
+  font-size:18px;
+  font-weight:700;
+  color:var(--ink);
+}
+.quiz-meta{
+  font-size:13px;
+  color:var(--muted);
+}
+.quiz-feedback{
+  font-size:14px;
+  font-weight:700;
+}
+.quiz-feedback.ok{color:#147d3f}
+.quiz-feedback.bad{color:#b42318}
+.quiz-next{margin-left:auto}
+.quiz-hit-correct{
+  box-shadow:0 0 0 5px rgba(20,125,63,.28);
+  background:#147d3f !important;
+  border-color:#147d3f !important;
+}
+.quiz-hit-wrong{
+  box-shadow:0 0 0 5px rgba(180,35,24,.22);
+  background:#b42318 !important;
+  border-color:#b42318 !important;
+}
+.mode-switch{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
 @media(max-width:700px){
   .app{padding:6px}
   .title{font-size:18px}
@@ -140,6 +183,7 @@ body.notice-open .app{
       <button id="labelsBtn">Beschriftungen ein</button>
       <button id="hideAll">Alle ausblenden</button>
       <button id="showAll">Alle anzeigen</button>
+      <button id="quizStartBtn" class="primary">Quiz starten</button>
     </div>
   </div>
 
@@ -163,6 +207,15 @@ const AIRPORT_CENTER = [8.55294, 47.45842];
 
 // Die Lernobjekte werden aus der Datei "lernobjekte.json" im gleichen GitHub-Ordner geladen.
 let OBJECTS = [];
+let appMode = 'learn'; // learn | quiz
+let quizNames = [];
+let quizOrder = [];
+let quizPos = 0;
+let quizCurrentName = '';
+let quizAnswered = false;
+let quizFirstTryCorrect = 0;
+let quizHadWrongAttempt = false;
+
 
 const map = new maplibregl.Map({
   container:'map',
@@ -215,6 +268,13 @@ const closureLabelLayerId = 'closure-label';
 const counter = document.getElementById('counter');
 const prompt = document.getElementById('prompt');
 const labelsBtn = document.getElementById('labelsBtn');
+const quizStartBtn = document.getElementById('quizStartBtn');
+const quizBar = document.getElementById('quizBar');
+const quizTarget = document.getElementById('quizTarget');
+const quizMeta = document.getElementById('quizMeta');
+const quizFeedback = document.getElementById('quizFeedback');
+const quizNextBtn = document.getElementById('quizNextBtn');
+const quizStopBtn = document.getElementById('quizStopBtn');
 const startNotice = document.getElementById('startNotice');
 const acceptNotice = document.getElementById('acceptNotice');
 
@@ -227,6 +287,188 @@ function updateCounter(){
   const shown = learning.filter(i=>revealed.has(i)).length;
   counter.textContent = `${shown} von ${learning.length} aufgedeckt`;
 }
+
+
+function normalizedName(name){
+  return String(name || '').trim().toLocaleUpperCase('de-CH');
+}
+
+function quizEligibleObjects(){
+  return OBJECTS.filter(o =>
+    o &&
+    o.type !== 'closure' &&
+    o.geometry &&
+    normalizedName(o.name)
+  );
+}
+
+function buildQuizNames(){
+  const seen = new Set();
+  const names = [];
+
+  quizEligibleObjects().forEach(o=>{
+    const key = normalizedName(o.name);
+    if(!seen.has(key)){
+      seen.add(key);
+      names.push({key, label:String(o.name).trim()});
+    }
+  });
+
+  return names;
+}
+
+function shuffleArray(arr){
+  const copy = [...arr];
+  for(let i = copy.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function clearQuizHighlights(){
+  document.querySelectorAll('.quiz-hit-correct,.quiz-hit-wrong').forEach(el=>{
+    el.classList.remove('quiz-hit-correct','quiz-hit-wrong');
+  });
+
+  if(map.getLayer('quiz-correct-layer')) map.removeLayer('quiz-correct-layer');
+  if(map.getLayer('quiz-wrong-layer')) map.removeLayer('quiz-wrong-layer');
+  if(map.getSource('quiz-correct-source')) map.removeSource('quiz-correct-source');
+  if(map.getSource('quiz-wrong-source')) map.removeSource('quiz-wrong-source');
+}
+
+function addQuizShapeHighlight(obj, correct){
+  const sourceId = correct ? 'quiz-correct-source' : 'quiz-wrong-source';
+  const layerId = correct ? 'quiz-correct-layer' : 'quiz-wrong-layer';
+
+  if(map.getLayer(layerId)) map.removeLayer(layerId);
+  if(map.getSource(sourceId)) map.removeSource(sourceId);
+
+  map.addSource(sourceId,{
+    type:'geojson',
+    data:{
+      type:'Feature',
+      properties:{},
+      geometry:obj.geometry
+    }
+  });
+
+  map.addLayer({
+    id:layerId,
+    type: obj.geometry.type === 'Polygon' ? 'line' : 'line',
+    source:sourceId,
+    paint:{
+      'line-color': correct ? '#147d3f' : '#b42318',
+      'line-width': correct ? 8 : 7,
+      'line-opacity':0.95
+    }
+  });
+}
+
+function updateQuizMeta(){
+  quizMeta.textContent = `Frage ${Math.min(quizPos + 1, quizOrder.length)} von ${quizOrder.length} · ${quizFirstTryCorrect} beim ersten Versuch richtig`;
+}
+
+function showQuizQuestion(){
+  clearQuizHighlights();
+
+  if(quizPos >= quizOrder.length){
+    quizTarget.textContent = 'Quiz abgeschlossen';
+    quizFeedback.className = 'quiz-feedback ok';
+    quizFeedback.textContent = `${quizFirstTryCorrect} von ${quizOrder.length} beim ersten Versuch richtig`;
+    quizMeta.textContent = '';
+    quizNextBtn.disabled = true;
+    quizStartBtn.textContent = 'Neues Quiz starten';
+    return;
+  }
+
+  const q = quizOrder[quizPos];
+  quizCurrentName = q.key;
+  quizAnswered = false;
+  quizHadWrongAttempt = false;
+
+  quizTarget.textContent = `Finde: ${q.label}`;
+  quizFeedback.textContent = '';
+  quizFeedback.className = 'quiz-feedback';
+  quizNextBtn.disabled = true;
+  updateQuizMeta();
+}
+
+function startQuiz(){
+  const names = buildQuizNames();
+  if(!names.length){
+    alert('Es sind noch keine Lernobjekte für ein Quiz vorhanden.');
+    return;
+  }
+
+  appMode = 'quiz';
+  quizNames = names;
+  quizOrder = shuffleArray(names);
+  quizPos = 0;
+  quizFirstTryCorrect = 0;
+  quizHadWrongAttempt = false;
+  quizAnswered = false;
+
+  // Im Quiz keine Lernnamen offen lassen.
+  learningObjectIndices().forEach(i=>setRevealed(i,false));
+
+  quizBar.classList.remove('hidden');
+  quizStartBtn.textContent = 'Quiz neu starten';
+  prompt.textContent = 'Gesuchtes Objekt auf der Karte anklicken.';
+  showQuizQuestion();
+}
+
+function stopQuiz(){
+  appMode = 'learn';
+  clearQuizHighlights();
+  quizBar.classList.add('hidden');
+  quizFeedback.textContent = '';
+  quizNextBtn.disabled = true;
+  quizStartBtn.textContent = 'Quiz starten';
+  prompt.textContent = 'Objekt anklicken → Name anzeigen · nochmals anklicken → wieder ausblenden';
+}
+
+function handleQuizSelection(index, visualEl=null){
+  if(appMode !== 'quiz' || quizAnswered || !quizCurrentName) return;
+
+  const obj = OBJECTS[index];
+  if(!obj || obj.type === 'closure') return;
+
+  const correct = normalizedName(obj.name) === quizCurrentName;
+
+  if(correct){
+    quizAnswered = true;
+    if(!quizHadWrongAttempt) quizFirstTryCorrect++;
+
+    quizFeedback.className = 'quiz-feedback ok';
+    quizFeedback.textContent = 'Richtig';
+    quizNextBtn.disabled = false;
+    updateQuizMeta();
+
+    if(visualEl){
+      visualEl.classList.add('quiz-hit-correct');
+      setTimeout(()=>visualEl.classList.remove('quiz-hit-correct'), 1000);
+    }else if(obj.geometry && obj.geometry.type !== 'Point'){
+      addQuizShapeHighlight(obj, true);
+    }
+  }else{
+    quizHadWrongAttempt = true;
+    quizFeedback.className = 'quiz-feedback bad';
+    quizFeedback.textContent = 'Leider falsch – nochmals versuchen';
+
+    if(visualEl){
+      visualEl.classList.add('quiz-hit-wrong');
+      setTimeout(()=>visualEl.classList.remove('quiz-hit-wrong'), 850);
+    }else if(obj.geometry && obj.geometry.type !== 'Point'){
+      addQuizShapeHighlight(obj, false);
+      setTimeout(()=>{
+        if(map.getLayer('quiz-wrong-layer')) map.removeLayer('quiz-wrong-layer');
+        if(map.getSource('quiz-wrong-source')) map.removeSource('quiz-wrong-source');
+      },850);
+    }
+  }
+}
+
 
 function objectCenter(obj){
   const g = obj.geometry;
@@ -304,6 +546,12 @@ function addPointMarkers(){
 
     el.addEventListener('click', (e)=>{
       e.stopPropagation();
+
+      if(appMode === 'quiz'){
+        handleQuizSelection(index, el);
+        return;
+      }
+
       setRevealed(index, !revealed.has(index));
     });
   });
@@ -454,6 +702,12 @@ function addShapeLayers(){
 
     const index = Number(feature.properties.index);
     if(!Number.isInteger(index)) return;
+
+    if(appMode === 'quiz'){
+      handleQuizSelection(index, null);
+      return;
+    }
+
     setRevealed(index, !revealed.has(index));
   }
 
@@ -529,6 +783,18 @@ map.on('load', async ()=>{
   }
 });
 
+
+quizStartBtn.addEventListener('click', startQuiz);
+
+quizNextBtn.addEventListener('click', ()=>{
+  if(!quizAnswered) return;
+  quizPos++;
+  showQuizQuestion();
+});
+
+quizStopBtn.addEventListener('click', stopQuiz);
+
+
 document.getElementById('fitBtn').addEventListener('click', ()=>{
   map.easeTo({
     center:AIRPORT_CENTER,
@@ -544,10 +810,12 @@ labelsBtn.addEventListener('click', ()=>{
 });
 
 document.getElementById('hideAll').addEventListener('click', ()=>{
+  if(appMode === 'quiz') return;
   learningObjectIndices().forEach(i=>setRevealed(i,false));
 });
 
 document.getElementById('showAll').addEventListener('click', ()=>{
+  if(appMode === 'quiz') return;
   learningObjectIndices().forEach(i=>setRevealed(i,true));
 });
 
