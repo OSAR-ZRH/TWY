@@ -110,31 +110,70 @@ body.notice-open .app{
 
 
 .quizbar{
-  display:flex;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:12px 16px;
   align-items:center;
-  gap:10px;
-  flex-wrap:wrap;
-  padding:10px 12px;
+  padding:14px 16px;
   border-bottom:1px solid var(--line);
   background:#fff;
 }
 .quizbar.hidden{display:none}
+.quiz-questionbox{
+  min-width:0;
+  padding:14px 16px;
+  border:2px solid var(--blue);
+  border-radius:10px;
+  background:#f5f9fd;
+}
+.quiz-kicker{
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:var(--blue);
+  margin-bottom:4px;
+}
 .quiz-target{
-  font-size:18px;
+  font-size:26px;
+  line-height:1.15;
   font-weight:700;
   color:var(--ink);
 }
 .quiz-meta{
   font-size:13px;
   color:var(--muted);
+  margin-top:7px;
 }
 .quiz-feedback{
-  font-size:14px;
+  font-size:15px;
   font-weight:700;
+  margin-top:6px;
 }
 .quiz-feedback.ok{color:#147d3f}
 .quiz-feedback.bad{color:#b42318}
-.quiz-next{margin-left:auto}
+.quiz-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+.quiz-next{margin-left:0}
+.quiz-summary{
+  grid-column:1 / -1;
+  padding:12px 14px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:#f8fafb;
+  font-size:14px;
+  line-height:1.45;
+}
+.quiz-summary.hidden{display:none}
+.quiz-summary strong{
+  display:block;
+  font-size:18px;
+  margin-bottom:4px;
+}
 .quiz-hit-correct{
   box-shadow:0 0 0 5px rgba(20,125,63,.28);
   background:#147d3f !important;
@@ -152,6 +191,10 @@ body.notice-open .app{
 }
 
 @media(max-width:700px){
+  .quizbar{grid-template-columns:1fr}
+  .quiz-actions{justify-content:flex-start}
+  .quiz-target{font-size:22px}
+
   .app{padding:6px}
   .title{font-size:18px}
   .panel{min-height:650px}
@@ -164,7 +207,7 @@ body.notice-open .app{
   <div class="start-notice-card">
     <h2 id="startNoticeTitle">Hinweis zur Lernkarte</h2>
     <p>Diese Karte dient ausschliesslich dem Lernen der Bezeichnungen von Rollwegen, Standplätzen und Sektoren.</p>
-    <p>Die eingezeichneten Standplatz- und Sektorflächen sind schematisch dargestellt und nicht lagegenau. Sie dienen lediglich der Orientierung innerhalb der Lernkarte. Auch die Kartengrundlage kann vom aktuellen betrieblichen Zustand abweichen.</p>
+    <p>Die eingezeichneten Standplatz- und Sektorflächen sind schematisch dargestellt und nicht zwingend lagegenau. Sie dienen lediglich der Orientierung innerhalb der Lernkarte. Auch die Kartengrundlage kann vom aktuellen betrieblichen Zustand abweichen.</p>
     <p>Für den operativen Einsatz sind ausschliesslich die offiziellen und aktuellen Flughafenunterlagen massgebend.</p>
     <div class="notice-actions">
       <button id="acceptNotice" class="primary" type="button">Verstanden – Lernkarte öffnen</button>
@@ -189,13 +232,17 @@ body.notice-open .app{
 
 
   <div id="quizBar" class="quizbar hidden">
-    <div>
-      <div id="quizTarget" class="quiz-target">Finde: –</div>
+    <div class="quiz-questionbox">
+      <div id="quizKicker" class="quiz-kicker">Quiz</div>
+      <div id="quizTarget" class="quiz-target">–</div>
       <div id="quizMeta" class="quiz-meta"></div>
+      <div id="quizFeedback" class="quiz-feedback"></div>
     </div>
-    <div id="quizFeedback" class="quiz-feedback"></div>
-    <button id="quizNextBtn" class="primary quiz-next" type="button" disabled>Nächste Frage</button>
-    <button id="quizStopBtn" type="button">Quiz beenden</button>
+    <div class="quiz-actions">
+      <button id="quizNextBtn" class="primary quiz-next" type="button" disabled>Nächste Frage</button>
+      <button id="quizStopBtn" type="button">Quiz beenden</button>
+    </div>
+    <div id="quizSummary" class="quiz-summary hidden"></div>
   </div>
 
   <div class="panel">
@@ -226,6 +273,7 @@ let quizCurrentName = '';
 let quizAnswered = false;
 let quizFirstTryCorrect = 0;
 let quizHadWrongAttempt = false;
+let quizAttempted = 0;
 
 
 const map = new maplibregl.Map({
@@ -281,9 +329,11 @@ const prompt = document.getElementById('prompt');
 const labelsBtn = document.getElementById('labelsBtn');
 const quizStartBtn = document.getElementById('quizStartBtn');
 const quizBar = document.getElementById('quizBar');
+const quizKicker = document.getElementById('quizKicker');
 const quizTarget = document.getElementById('quizTarget');
 const quizMeta = document.getElementById('quizMeta');
 const quizFeedback = document.getElementById('quizFeedback');
+const quizSummary = document.getElementById('quizSummary');
 const quizNextBtn = document.getElementById('quizNextBtn');
 const quizStopBtn = document.getElementById('quizStopBtn');
 const startNotice = document.getElementById('startNotice');
@@ -314,18 +364,24 @@ function quizEligibleObjects(){
 }
 
 function buildQuizNames(){
-  const seen = new Set();
-  const names = [];
+  const grouped = new Map();
 
   quizEligibleObjects().forEach(o=>{
     const key = normalizedName(o.name);
-    if(!seen.has(key)){
-      seen.add(key);
-      names.push({key, label:String(o.name).trim()});
+    if(!grouped.has(key)){
+      grouped.set(key, {
+        key,
+        label:String(o.name).trim(),
+        objectType:o.type || (
+          o.geometry?.type === 'Point' ? 'point' :
+          o.geometry?.type === 'LineString' ? 'line' :
+          o.geometry?.type === 'Polygon' ? 'polygon' : ''
+        )
+      });
     }
   });
 
-  return names;
+  return [...grouped.values()];
 }
 
 function shuffleArray(arr){
@@ -376,20 +432,31 @@ function addQuizShapeHighlight(obj, correct){
   });
 }
 
+function quizQuestionText(q){
+  if(q.objectType === 'point'){
+    quizKicker.textContent = 'Rollweg gesucht';
+  }else if(q.objectType === 'line'){
+    quizKicker.textContent = 'Fahrstrasse gesucht';
+  }else{
+    quizKicker.textContent = 'Standplatz oder Sektor gesucht';
+  }
+
+  return q.label;
+}
+
 function updateQuizMeta(){
-  quizMeta.textContent = `Frage ${Math.min(quizPos + 1, quizOrder.length)} von ${quizOrder.length} · ${quizFirstTryCorrect} beim ersten Versuch richtig`;
+  quizMeta.textContent =
+    `Frage ${Math.min(quizPos + 1, quizOrder.length)} von ${quizOrder.length} · ` +
+    `${quizFirstTryCorrect} beim ersten Versuch richtig`;
 }
 
 function showQuizQuestion(){
   clearQuizHighlights();
+  quizSummary.classList.add('hidden');
+  quizStopBtn.textContent = 'Quiz beenden';
 
   if(quizPos >= quizOrder.length){
-    quizTarget.textContent = 'Quiz abgeschlossen';
-    quizFeedback.className = 'quiz-feedback ok';
-    quizFeedback.textContent = `${quizFirstTryCorrect} von ${quizOrder.length} beim ersten Versuch richtig`;
-    quizMeta.textContent = '';
-    quizNextBtn.disabled = true;
-    quizStartBtn.textContent = 'Neues Quiz starten';
+    showQuizResult('finished');
     return;
   }
 
@@ -398,11 +465,38 @@ function showQuizQuestion(){
   quizAnswered = false;
   quizHadWrongAttempt = false;
 
-  quizTarget.textContent = `Finde: ${q.label}`;
+  quizTarget.textContent = quizQuestionText(q);
   quizFeedback.textContent = '';
   quizFeedback.className = 'quiz-feedback';
   quizNextBtn.disabled = true;
   updateQuizMeta();
+}
+
+function showQuizResult(reason='finished'){
+  clearQuizHighlights();
+
+  const attempted = quizAttempted;
+  const firstTry = quizFirstTryCorrect;
+  const rate = attempted > 0 ? Math.round((firstTry / attempted) * 100) : 0;
+
+  quizKicker.textContent = reason === 'aborted' ? 'Quiz beendet' : 'Quiz abgeschlossen';
+  quizTarget.textContent = 'Auswertung';
+  quizMeta.textContent = '';
+  quizFeedback.textContent = '';
+  quizFeedback.className = 'quiz-feedback';
+
+  quizSummary.classList.remove('hidden');
+  quizSummary.innerHTML = `
+    <strong>${firstTry} von ${attempted} beim ersten Versuch richtig</strong>
+    ${attempted > 0
+      ? `${rate}% Erstversuchsquote · ${attempted} Frage${attempted === 1 ? '' : 'n'} beantwortet`
+      : 'Noch keine Frage beantwortet.'}
+  `;
+
+  quizNextBtn.disabled = true;
+  quizStopBtn.textContent = 'Zurück zum Lernmodus';
+  quizStartBtn.textContent = 'Neues Quiz starten';
+  appMode = 'result';
 }
 
 function startQuiz(){
@@ -413,37 +507,37 @@ function startQuiz(){
     return;
   }
 
-  if(!quizBar || !quizTarget || !quizMeta || !quizFeedback || !quizNextBtn || !quizStopBtn){
-    console.error('Quiz-Oberfläche konnte nicht initialisiert werden.');
-    alert('Der Quizmodus konnte nicht gestartet werden.');
-    appMode = 'learn';
-    return;
-  }
-
-  // Erst in den Quizmodus wechseln, wenn die Oberfläche vollständig vorhanden ist.
   appMode = 'quiz';
   quizNames = names;
-  quizOrder = shuffleArray(names);
+  quizOrder = shuffleArray(names).slice(0, Math.min(20, names.length));
   quizPos = 0;
   quizFirstTryCorrect = 0;
+  quizAttempted = 0;
   quizHadWrongAttempt = false;
   quizAnswered = false;
 
-  // Im Quiz keine Lernnamen offen lassen.
   learningObjectIndices().forEach(i=>setRevealed(i,false));
 
   quizBar.classList.remove('hidden');
+  quizSummary.classList.add('hidden');
   quizStartBtn.textContent = 'Quiz neu starten';
   prompt.textContent = 'Gesuchtes Objekt auf der Karte anklicken.';
   showQuizQuestion();
 }
 
 function stopQuiz(){
+  if(appMode === 'quiz'){
+    showQuizResult('aborted');
+    return;
+  }
+
   appMode = 'learn';
   clearQuizHighlights();
   quizBar.classList.add('hidden');
+  quizSummary.classList.add('hidden');
   quizFeedback.textContent = '';
   quizNextBtn.disabled = true;
+  quizStopBtn.textContent = 'Quiz beenden';
   quizStartBtn.textContent = 'Quiz starten';
   prompt.textContent = 'Objekt anklicken → Name anzeigen · nochmals anklicken → wieder ausblenden';
 }
@@ -458,6 +552,7 @@ function handleQuizSelection(index, visualEl=null){
 
   if(correct){
     quizAnswered = true;
+    quizAttempted++;
     if(!quizHadWrongAttempt) quizFirstTryCorrect++;
 
     quizFeedback.className = 'quiz-feedback ok';
@@ -571,6 +666,7 @@ function addPointMarkers(){
         handleQuizSelection(index, el);
         return;
       }
+      if(appMode === 'result') return;
 
       setRevealed(index, !revealed.has(index));
     });
@@ -727,6 +823,7 @@ function addShapeLayers(){
       handleQuizSelection(index, null);
       return;
     }
+    if(appMode === 'result') return;
 
     setRevealed(index, !revealed.has(index));
   }
@@ -836,12 +933,12 @@ labelsBtn.addEventListener('click', ()=>{
 });
 
 document.getElementById('hideAll').addEventListener('click', ()=>{
-  if(appMode === 'quiz') return;
+  if(appMode !== 'learn') return;
   learningObjectIndices().forEach(i=>setRevealed(i,false));
 });
 
 document.getElementById('showAll').addEventListener('click', ()=>{
-  if(appMode === 'quiz') return;
+  if(appMode !== 'learn') return;
   learningObjectIndices().forEach(i=>setRevealed(i,true));
 });
 
