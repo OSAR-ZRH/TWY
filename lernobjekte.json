@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-28T09:16:39.532Z",
+  "generatedAt": "2026-08-28T09:52:32.585Z",
   "objects": [
     {
       "id": "d0f8e3f1-8a73-4a45-91af-3c755e840d85",
@@ -2436,14 +2436,14 @@
     },
     {
       "id": "9ccfceb3-d069-4b13-b597-9e4d144a6082",
-      "name": "E1",
+      "name": "Echo",
       "type": "point",
       "geometry": {
-        "type": "Point",
         "coordinates": [
           8.545805224840223,
           47.465431309489674
-        ]
+        ],
+        "type": "Point"
       },
       "note": ""
     },
