@@ -1,5 +1,3 @@
-
-
 <!doctype html>
 <html lang="de">
 <head>
@@ -25,6 +23,18 @@ html,body{margin:0;width:100%;height:100%;font-family:Arial,Helvetica,sans-serif
 .title{font-size:21px;font-weight:700}
 .sub{font-size:12px;color:var(--muted);margin-top:2px}
 .actions{display:flex;gap:7px;flex-wrap:wrap}
+.plan-opacity{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:0 4px;
+  font-size:12px;
+  color:var(--muted);
+}
+.plan-opacity input{
+  width:90px;
+}
+
 button{
   min-height:42px;padding:9px 12px;border:1px solid var(--line);background:white;color:var(--ink);
   border-radius:8px;font:inherit;cursor:pointer
@@ -318,7 +328,7 @@ body.notice-open .app{
     </div>
     <div class="actions">
       <button id="fitBtn">Flughafen</button>
-      <button id="hideAll">Alle ausblenden</button>
+      <button id="labelsBtn">Beschriftungen ein</button>      <button id="hideAll">Alle ausblenden</button>
       <button id="showAll">Alle anzeigen</button>
       <button id="quizStartBtn" class="primary">Quiz starten</button>
     </div>
@@ -348,7 +358,7 @@ body.notice-open .app{
     <div id="map" aria-label="Interaktive Flughafenkarte"></div>
     <div class="footer">
       Rote schraffierte Flächen kennzeichnen temporäre Sperrungen/Baustellen und bleiben dauerhaft sichtbar.
-      Grundkarte: OpenStreetMap Standard · Kartendaten © OpenStreetMap-Mitwirkende.
+      Kartendaten © OpenStreetMap-Mitwirkende.
     </div>
   </div>
 </div>
@@ -373,24 +383,7 @@ let quizAttempted = 0;
 
 const map = new maplibregl.Map({
   container:'map',
-  style:{
-    version:8,
-    sources:{
-      osm:{
-        type:'raster',
-        tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-        tileSize:256,
-        attribution:'© OpenStreetMap-Mitwirkende'
-      }
-    },
-    layers:[
-      {
-        id:'osm-standard',
-        type:'raster',
-        source:'osm'
-      }
-    ]
-  },
+  style:'https://tiles.openfreemap.org/styles/bright',
   center:AIRPORT_CENTER,
   zoom:13.6,
   minZoom:11,
@@ -425,6 +418,7 @@ map.on('pitch', ()=>{
 
 const revealed = new Set();
 const items = [];
+let labelsHidden = true;
 
 const objectSourceId = 'learning-objects';
 const objectLineLayerId = 'learning-lines';
@@ -437,6 +431,7 @@ const closureLabelLayerId = 'closure-label';
 
 const counter = document.getElementById('counter');
 const prompt = document.getElementById('prompt');
+const labelsBtn = document.getElementById('labelsBtn');
 const quizStartBtn = document.getElementById('quizStartBtn');
 const quizBar = document.getElementById('quizBar');
 const quizKicker = document.getElementById('quizKicker');
@@ -974,6 +969,8 @@ function addShapeLayers(){
   });
 }
 
+
+
 async function loadObjects(){
   const response = await fetch('./lernobjekte.json', {cache:'no-store'});
   if(!response.ok){
@@ -994,6 +991,26 @@ async function loadObjects(){
   updateCounter();
 }
 
+function setLabelVisibility(hidden){
+  const style = map.getStyle();
+  if(!style || !style.layers) return;
+
+  style.layers.forEach(layer=>{
+    if(layer.type === 'symbol'){
+      // Eigene Baustellenbeschriftung bleibt immer sichtbar
+      if(layer.id === closureLabelLayerId) return;
+
+      try{
+        map.setLayoutProperty(layer.id, 'visibility', hidden ? 'none' : 'visible');
+      }catch(_){}
+    }
+  });
+
+  labelsHidden = hidden;
+  labelsBtn.textContent = hidden ? 'Beschriftungen ein' : 'Beschriftungen aus';
+}
+
+
 acceptNotice.addEventListener('click', ()=>{
   startNotice.classList.add('hidden');
   document.body.classList.remove('notice-open');
@@ -1003,6 +1020,10 @@ acceptNotice.addEventListener('click', ()=>{
 map.on('load', async ()=>{
   try{
     await loadObjects();
+
+    // Standardansicht: OSM-Beschriftungen aus.
+    // Eigene Baustellenbeschriftungen bleiben sichtbar.
+    setLabelVisibility(true);
 
     prompt.textContent = 'Kennst du die korrekten Bezeichnungen? Erst überlegen, dann aufdecken.';
   }catch(err){
@@ -1039,6 +1060,11 @@ document.getElementById('fitBtn').addEventListener('click', ()=>{
     duration:500
   });
 });
+
+labelsBtn.addEventListener('click', ()=>{
+  setLabelVisibility(!labelsHidden);
+});
+
 
 document.getElementById('hideAll').addEventListener('click', ()=>{
   if(appMode !== 'learn') return;
