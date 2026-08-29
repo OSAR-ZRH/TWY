@@ -25,18 +25,6 @@ html,body{margin:0;width:100%;height:100%;font-family:Arial,Helvetica,sans-serif
 .title{font-size:21px;font-weight:700}
 .sub{font-size:12px;color:var(--muted);margin-top:2px}
 .actions{display:flex;gap:7px;flex-wrap:wrap}
-.plan-opacity{
-  display:flex;
-  align-items:center;
-  gap:6px;
-  padding:0 4px;
-  font-size:12px;
-  color:var(--muted);
-}
-.plan-opacity input{
-  width:90px;
-}
-
 button{
   min-height:42px;padding:9px 12px;border:1px solid var(--line);background:white;color:var(--ink);
   border-radius:8px;font:inherit;cursor:pointer
@@ -331,10 +319,6 @@ body.notice-open .app{
     <div class="actions">
       <button id="fitBtn">Flughafen</button>
       <button id="labelsBtn">Beschriftungen ein</button>
-      <button id="planBtn">Flughafenplan ein</button>
-      <label class="plan-opacity" for="planOpacity">Plan
-        <input id="planOpacity" type="range" min="10" max="100" value="60" disabled>
-      </label>
       <button id="hideAll">Alle ausblenden</button>
       <button id="showAll">Alle anzeigen</button>
       <button id="quizStartBtn" class="primary">Quiz starten</button>
@@ -364,7 +348,7 @@ body.notice-open .app{
     </div>
     <div id="map" aria-label="Interaktive Flughafenkarte"></div>
     <div class="footer">
-      Rote schraffierte Flächen kennzeichnen temporäre Sperrungen/Baustellen und bleiben dauerhaft sichtbar. Der Flughafenplan kann optional als Layer eingeblendet werden.
+      Rote schraffierte Flächen kennzeichnen temporäre Sperrungen/Baustellen und bleiben dauerhaft sichtbar.
       Kartendaten © OpenStreetMap-Mitwirkende.
     </div>
   </div>
@@ -426,7 +410,6 @@ map.on('pitch', ()=>{
 const revealed = new Set();
 const items = [];
 let labelsHidden = true;
-let airportPlanVisible = false;
 
 const objectSourceId = 'learning-objects';
 const objectLineLayerId = 'learning-lines';
@@ -436,23 +419,10 @@ const closureFillLayerId = 'closure-fill';
 const closurePatternLayerId = 'closure-pattern';
 const closureOutlineLayerId = 'closure-outline';
 const closureLabelLayerId = 'closure-label';
-const airportPlanSourceId = 'airport-plan-source';
-const airportPlanLayerId = 'airport-plan-layer';
-
-// GeoPDF-Koordinaten des Kartenrahmens (Ausgabe Januar 2026).
-// Reihenfolge für MapLibre: oben links, oben rechts, unten rechts, unten links.
-const AIRPORT_PLAN_CORNERS = [
-  [8.52530, 47.49222],
-  [8.58243, 47.49167],
-  [8.58124, 47.43636],
-  [8.52417, 47.43691]
-];
 
 const counter = document.getElementById('counter');
 const prompt = document.getElementById('prompt');
 const labelsBtn = document.getElementById('labelsBtn');
-const planBtn = document.getElementById('planBtn');
-const planOpacity = document.getElementById('planOpacity');
 const quizStartBtn = document.getElementById('quizStartBtn');
 const quizBar = document.getElementById('quizBar');
 const quizKicker = document.getElementById('quizKicker');
@@ -990,49 +960,6 @@ function addShapeLayers(){
   });
 }
 
-
-function addAirportPlanOverlay(){
-  if(map.getSource(airportPlanSourceId)) return;
-
-  map.addSource(airportPlanSourceId,{
-    type:'image',
-    url:'./flughafenplan_overlay.jpg',
-    coordinates:AIRPORT_PLAN_CORNERS
-  });
-
-  // Der Plan liegt über der OSM-Grundkarte, aber unter unseren Lernobjekten.
-  map.addLayer({
-    id:airportPlanLayerId,
-    type:'raster',
-    source:airportPlanSourceId,
-    paint:{
-      'raster-opacity':0.60,
-      'raster-fade-duration':0
-    },
-    layout:{
-      visibility:'none'
-    }
-  });
-}
-
-function setAirportPlanVisible(visible){
-  airportPlanVisible = visible;
-
-  if(map.getLayer(airportPlanLayerId)){
-    map.setLayoutProperty(
-      airportPlanLayerId,
-      'visibility',
-      visible ? 'visible' : 'none'
-    );
-  }
-
-  planBtn.textContent = visible
-    ? 'Flughafenplan aus'
-    : 'Flughafenplan ein';
-
-  planOpacity.disabled = !visible;
-}
-
 async function loadObjects(){
   const response = await fetch('./lernobjekte.json', {cache:'no-store'});
   if(!response.ok){
@@ -1081,7 +1008,6 @@ acceptNotice.addEventListener('click', ()=>{
 
 map.on('load', async ()=>{
   try{
-    addAirportPlanOverlay();
     await loadObjects();
 
     // Standardansicht: OSM-Beschriftungen aus.
@@ -1126,16 +1052,6 @@ document.getElementById('fitBtn').addEventListener('click', ()=>{
 
 labelsBtn.addEventListener('click', ()=>{
   setLabelVisibility(!labelsHidden);
-});
-
-planBtn.addEventListener('click', ()=>{
-  setAirportPlanVisible(!airportPlanVisible);
-});
-
-planOpacity.addEventListener('input', ()=>{
-  if(!map.getLayer(airportPlanLayerId)) return;
-  const opacity = Math.max(0.10, Math.min(1, Number(planOpacity.value) / 100));
-  map.setPaintProperty(airportPlanLayerId, 'raster-opacity', opacity);
 });
 
 document.getElementById('hideAll').addEventListener('click', ()=>{
