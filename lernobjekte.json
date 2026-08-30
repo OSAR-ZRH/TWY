@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-30T07:30:13.711Z",
+  "generatedAt": "2026-08-30T07:39:29.452Z",
   "objects": [
     {
       "id": "d0f8e3f1-8a73-4a45-91af-3c755e840d85",
@@ -33,7 +33,6 @@
       "name": "Weststrasse",
       "type": "line",
       "geometry": {
-        "type": "LineString",
         "coordinates": [
           [
             8.551178287227003,
@@ -75,16 +74,16 @@
             8.560148580301387,
             47.44334284704081
           ]
-        ]
+        ],
+        "type": "LineString"
       },
-      "note": ""
+      "note": "Bei LVP-Aktiv Fahrverbot!"
     },
     {
       "id": "8444898f-8e56-4138-b272-48b46870768e",
       "name": "Oststrasse",
       "type": "line",
       "geometry": {
-        "type": "LineString",
         "coordinates": [
           [
             8.551179710339227,
@@ -130,15 +129,17 @@
             8.57229625878415,
             47.455697386178144
           ]
-        ]
+        ],
+        "type": "LineString"
       },
-      "note": ""
+      "note": "Bei LVP-Aktiv Fahrverbot!"
     },
     {
       "id": "c11bb66d-461f-4fbe-92b7-2bd80da8da27",
       "name": "Bravostrasse",
       "type": "line",
       "geometry": {
+        "type": "LineString",
         "coordinates": [
           [
             8.551807132677567,
@@ -164,10 +165,9 @@
             8.568206848954901,
             47.458193729208205
           ]
-        ],
-        "type": "LineString"
+        ]
       },
-      "note": ""
+      "note": "Bei LVP-Aktiv Fahrverbot!"
     },
     {
       "id": "e8afd564-7361-4eb1-ab0f-1133674bd206",
@@ -206,7 +206,7 @@
           ]
         ]
       },
-      "note": ""
+      "note": "Bei LVP-Aktiv Fahrverbot!"
     },
     {
       "id": "ea906a77-f031-4d85-9deb-06fd76b2fa57",
