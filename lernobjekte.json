@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-30T06:53:08.629Z",
+  "generatedAt": "2026-08-30T07:30:13.711Z",
   "objects": [
     {
       "id": "d0f8e3f1-8a73-4a45-91af-3c755e840d85",
@@ -3489,7 +3489,7 @@
     },
     {
       "id": "ca4b762a-48c5-4449-9b57-4e757060248e",
-      "name": "Sichstrasse Schwelle 14",
+      "name": "Stichstrasse Schwelle 14",
       "type": "line",
       "geometry": {
         "coordinates": [
