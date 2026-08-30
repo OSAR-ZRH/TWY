@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-30T07:39:29.452Z",
+  "generatedAt": "2026-08-30T07:46:10.539Z",
   "objects": [
     {
       "id": "d0f8e3f1-8a73-4a45-91af-3c755e840d85",
@@ -4251,6 +4251,19 @@
           ]
         ],
         "type": "Polygon"
+      },
+      "note": ""
+    },
+    {
+      "id": "9015a24e-5f8e-494b-93fc-5b21f607fcb4",
+      "name": "Airport Authority",
+      "type": "point",
+      "geometry": {
+        "coordinates": [
+          8.562102154189887,
+          47.448709996464885
+        ],
+        "type": "Point"
       },
       "note": ""
     }
