@@ -542,6 +542,8 @@ function quizQuestionText(q){
     quizKicker.textContent = 'Rollweg gesucht';
   }else if(q.objectType === 'line'){
     quizKicker.textContent = 'Fahrstrasse gesucht';
+  }else if(q.objectType === 'runway'){
+    quizKicker.textContent = 'Piste gesucht';
   }else{
     quizKicker.textContent = 'Standplatz oder Sektor gesucht';
   }
@@ -838,8 +840,16 @@ function addShapeLayers(){
       ['!=',['get','type'],'closure']
     ],
     paint:{
-      'fill-color':'#00549f',
-      'fill-opacity':0.18
+      'fill-color':[
+        'case',
+        ['==',['get','type'],'runway'],'#6f4ea1',
+        '#00549f'
+      ],
+      'fill-opacity':[
+        'case',
+        ['==',['get','type'],'runway'],0.16,
+        0.18
+      ]
     }
   });
 
@@ -852,7 +862,11 @@ function addShapeLayers(){
       ['!=',['get','type'],'closure']
     ],
     paint:{
-      'line-color':'#00549f',
+      'line-color':[
+        'case',
+        ['==',['get','type'],'runway'],'#6f4ea1',
+        '#00549f'
+      ],
       'line-width':4
     }
   });
