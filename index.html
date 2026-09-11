@@ -1,0 +1,1311 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Lernkarte Flughafen Zürich</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.2.0/dist/maplibre-gl.css">
+<style>
+:root{
+  --blue:#00549f;
+  --ink:#15202b;
+  --muted:#697581;
+  --line:#d8dee5;
+  --bg:#f4f6f8;
+}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink);overflow:hidden}
+.app{height:100%;display:flex;flex-direction:column;padding:10px 12px}
+.top{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  margin-bottom:8px;flex:0 0 auto
+}
+.title{font-size:21px;font-weight:700}
+.sub{font-size:12px;color:var(--muted);margin-top:2px}
+.actions{display:flex;gap:7px;flex-wrap:wrap}
+.plan-opacity{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:0 4px;
+  font-size:12px;
+  color:var(--muted);
+}
+.plan-opacity input{
+  width:90px;
+}
+
+button{
+  min-height:42px;padding:9px 12px;border:1px solid var(--line);background:white;color:var(--ink);
+  border-radius:8px;font:inherit;cursor:pointer
+}
+button.primary{background:var(--blue);color:white;border-color:var(--blue)}
+.panel{
+  flex:1;min-height:0;background:white;border:1px solid var(--line);border-radius:10px;overflow:hidden;
+  display:flex;flex-direction:column
+}
+.info{
+  flex:0 0 auto;padding:8px 12px;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap
+}
+#map{flex:1;min-height:0}
+.counter{font-size:13px;color:var(--muted)}
+.footer{
+  flex:0 0 auto;padding:6px 10px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)
+}
+.memory-marker{
+  width:32px;
+  height:32px;
+  min-width:32px;
+  min-height:32px;
+  padding:0;
+  border-radius:50%;
+  background:white;
+  border:4px solid var(--blue);
+  box-shadow:0 1px 3px rgba(0,0,0,.22);
+  cursor:pointer;
+  appearance:none;
+  -webkit-appearance:none;
+  flex:0 0 32px;
+}
+.memory-marker.revealed{background:var(--blue)}
+.memory-label{
+  background:rgba(18,26,34,.94);color:white;font-weight:700;font-size:14px;
+  padding:6px 9px;border-radius:6px;white-space:nowrap
+}
+.shape-hit{cursor:pointer}
+.maplibregl-popup-content{
+  padding:0!important;background:transparent!important;box-shadow:none!important
+}
+.maplibregl-popup-tip{display:none}
+.maplibregl-ctrl-attrib{font-size:11px}
+
+.start-notice{
+  position:fixed;
+  inset:0;
+  z-index:9999;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  background:rgba(15,23,31,.58);
+  backdrop-filter:blur(3px);
+}
+.start-notice.hidden{display:none}
+
+.loading-screen{
+  position:fixed;
+  inset:0;
+  z-index:10000;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#f4f6f8;
+  padding:20px;
+}
+.loading-screen.hidden{display:none}
+.loading-card{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:12px;
+  color:var(--ink);
+  font-size:15px;
+  font-weight:700;
+}
+.loading-spinner{
+  width:38px;
+  height:38px;
+  border:4px solid #d8dee5;
+  border-top-color:var(--blue);
+  border-radius:50%;
+  animation:loadingSpin .8s linear infinite;
+}
+.loading-error{
+  max-width:480px;
+  text-align:center;
+  line-height:1.45;
+  font-weight:400;
+  color:#b42318;
+}
+@keyframes loadingSpin{to{transform:rotate(360deg)}}
+
+.start-notice-card{
+  width:min(560px,100%);
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:24px;
+  box-shadow:0 14px 40px rgba(0,0,0,.24);
+}
+.start-notice-card h2{
+  margin:0 0 14px;
+  font-size:21px;
+}
+.start-notice-card p{
+  margin:0 0 12px;
+  font-size:15px;
+  line-height:1.5;
+}
+.start-notice-card a{
+  color:var(--blue);
+  font-weight:700;
+  text-decoration:none;
+}
+.start-notice-card a:hover{text-decoration:underline}
+.start-notice-help{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;
+  margin-top:14px;
+}
+.start-notice-help-item{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:9px 10px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:#f8fafb;
+  font-size:13px;
+  line-height:1.3;
+}
+.start-notice-help-icon{
+  font-size:18px;
+  flex:0 0 auto;
+}
+@media(max-width:560px){
+  .start-notice-help{
+    grid-template-columns:1fr;
+  }
+}
+.start-notice-card .notice-actions{
+  display:flex;
+  justify-content:flex-end;
+  margin-top:20px;
+}
+body.notice-open .app{
+  pointer-events:none;
+  user-select:none;
+}
+
+
+.quizbar{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px 12px;
+  align-items:center;
+  padding:8px 12px;
+  border-bottom:1px solid var(--line);
+  background:#fff;
+}
+.quizbar.hidden{display:none}
+.quiz-questionbox{
+  min-width:0;
+  padding:8px 12px;
+  border:2px solid var(--blue);
+  border-radius:8px;
+  background:#f5f9fd;
+}
+.quiz-kicker{
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:var(--blue);
+  margin-bottom:2px;
+}
+.quiz-target{
+  font-size:24px;
+  line-height:1;
+  font-weight:700;
+  color:var(--ink);
+}
+.quiz-meta{
+  font-size:12px;
+  color:var(--muted);
+  margin-top:4px;
+}
+.quiz-feedback{
+  font-size:15px;
+  font-weight:700;
+  margin-top:6px;
+}
+.quiz-feedback.ok{color:#147d3f}
+.quiz-feedback.bad{color:#b42318}
+.quiz-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+.quiz-next{margin-left:0}
+.quiz-summary{
+  grid-column:1 / -1;
+  padding:12px 14px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:#f8fafb;
+  font-size:13px;
+  line-height:1.35;
+}
+.quiz-summary.hidden{display:none}
+
+.quiz-result-grid{
+  display:grid;
+  grid-template-columns:112px minmax(0,1fr);
+  gap:14px;
+  align-items:center;
+}
+
+.quiz-score{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  width:112px;
+  height:112px;
+  border-radius:50%;
+  border:7px solid var(--blue);
+  background:#fff;
+}
+
+.quiz-score-value{
+  font-size:30px;
+  line-height:1;
+  font-weight:700;
+  color:var(--blue);
+}
+
+.quiz-score-label{
+  margin-top:4px;
+  font-size:10px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  color:var(--muted);
+}
+
+.quiz-result-main strong{
+  display:block;
+  font-size:18px;
+  margin-bottom:6px;
+}
+
+.quiz-progress{
+  height:10px;
+  border-radius:999px;
+  background:#e5e9ee;
+  overflow:hidden;
+  margin:8px 0 6px;
+}
+
+.quiz-progress-fill{
+  height:100%;
+  width:0;
+  background:var(--blue);
+  border-radius:999px;
+}
+
+.quiz-result-note{
+  color:var(--muted);
+  font-size:12px;
+}
+
+@media(max-width:560px){
+  .quiz-summary{
+    padding:10px 12px;
+  }
+
+  .quiz-result-grid{
+    grid-template-columns:88px minmax(0,1fr);
+    gap:10px;
+  }
+
+  .quiz-score{
+    width:88px;
+    height:88px;
+    border-width:6px;
+  }
+
+  .quiz-score-value{
+    font-size:24px;
+  }
+
+  .quiz-score-label{
+    font-size:9px;
+  }
+
+  .quiz-result-main strong{
+    font-size:16px;
+  }
+
+  .quiz-result-note{
+    font-size:11px;
+  }
+
+  .quiz-progress{
+    height:8px;
+    margin:6px 0 5px;
+  }
+}
+.quiz-hit-correct{
+  box-shadow:0 0 0 5px rgba(20,125,63,.28);
+  background:#147d3f !important;
+  border-color:#147d3f !important;
+}
+.quiz-hit-wrong{
+  box-shadow:0 0 0 5px rgba(180,35,24,.22);
+  background:#b42318 !important;
+  border-color:#b42318 !important;
+}
+.mode-switch{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+@media(max-width:700px){
+  .quizbar{grid-template-columns:1fr}
+  .quiz-actions{justify-content:flex-start}
+  .quiz-target{font-size:22px}
+
+  .app{padding:6px}
+  .title{font-size:18px}
+  .panel{min-height:650px}
+}
+</style>
+</head>
+<body>
+
+<div id="loadingScreen" class="loading-screen" role="status" aria-live="polite">
+  <div class="loading-card">
+    <div class="loading-spinner" aria-hidden="true"></div>
+    <div id="loadingText">Lernkarte wird geladen …</div>
+  </div>
+</div>
+
+<div id="startNotice" class="start-notice hidden" role="dialog" aria-modal="true" aria-labelledby="startNoticeTitle">
+  <div class="start-notice-card">
+    <h2 id="startNoticeTitle">Hinweis zur Lernkarte</h2>
+    <p>Diese Karte dient ausschliesslich dem Lernen der Bezeichnungen von Pisten, Rollwegen, Servicestrassen, Standplätzen und Sektoren.</p>
+    <p>Die Kartengrundlage basiert auf dem offiziellen Flughafenplan.<p>Die zusätzlich eingezeichneten Lernflächen und Markierungen sind teilweise schematisch dargestellt und dienen ausschliesslich der Orientierung innerhalb der Lernkarte.</p>
+    <p>Für den operativen Einsatz sind ausschliesslich die offiziellen und aktuellen Flughafenunterlagen massgebend.</p>
+    <p>Bei Fragen oder Unklarheiten: <a href="mailto:ausbildung_airportauthority@zurich-airport.com">Ausbildung Airport Authority kontaktieren</a>.</p>
+
+    <div class="start-notice-help" aria-label="Karte bedienen">
+      <div class="start-notice-help-item">
+        <span class="start-notice-help-icon">↔️</span>
+        <span><strong>Ziehen</strong><br>Karte verschieben</span>
+      </div>
+      <div class="start-notice-help-item">
+        <span class="start-notice-help-icon">🔍</span>
+        <span><strong>Scrollen / Zwei-Finger-Geste</strong><br>hinein- und herauszoomen</span>
+      </div>
+      <div class="start-notice-help-item">
+        <span class="start-notice-help-icon">👆</span>
+        <span><strong>Objekt anklicken</strong><br>Bezeichnung aufdecken</span>
+      </div>
+    </div>
+
+    <div class="notice-actions">
+      <button id="acceptNotice" class="primary" type="button">Verstanden – Lernkarte öffnen</button>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+  <div class="top">
+    <div>
+      <div class="title">Lernkarte Flughafen Zürich</div>
+      <div class="sub">Pisten - Rollwege - Standplätze - Servicestrassen - Sektoren</div>
+    </div>
+    <div class="actions">
+      <button id="fitBtn">Map zentrieren</button>
+      <button id="hideAll">Alle ausblenden</button>
+      <button id="showAll">Alle anzeigen</button>
+      <button id="quizStartBtn" class="primary">Quiz starten</button>
+    </div>
+  </div>
+
+
+  <div id="quizBar" class="quizbar hidden">
+    <div class="quiz-questionbox">
+      <div id="quizKicker" class="quiz-kicker">Quiz</div>
+      <div id="quizTarget" class="quiz-target">–</div>
+      <div id="quizMeta" class="quiz-meta"></div>
+      <div id="quizFeedback" class="quiz-feedback"></div>
+    </div>
+    <div class="quiz-actions">
+      <button id="quizNextBtn" class="primary quiz-next" type="button" disabled>Nächste Frage</button>
+      <button id="quizStopBtn" type="button">Quiz beenden</button>
+    </div>
+    <div id="quizSummary" class="quiz-summary hidden"></div>
+  </div>
+
+  <div class="panel">
+    <div class="info">
+      <strong id="prompt">Kennst du die korrekten Bezeichnungen? Erst überlegen, dann aufdecken.
+</strong>
+      <span class="counter" id="counter">0 Objekte</span>
+    </div>
+    <div id="map" aria-label="Interaktive Flughafenkarte"></div>
+    <div class="footer">
+      Ausschliesslich zum Erlernen der Bezeichnungen verwenden. Nicht für operative Tätigkeiten verwenden.
+      Kartengrundlage: Flughafenplan.
+    </div>
+  </div>
+</div>
+
+<!-- Stabilitäts-Bootstrap: Startdialog unabhängig vom Kartenmodul -->
+<script>
+(function(){
+  function closeStartNotice(){
+    var notice = document.getElementById('startNotice');
+    if(notice) notice.classList.add('hidden');
+    document.body.classList.remove('notice-open');
+
+    if(window.__zrhMap && typeof window.__zrhMap.resize === 'function'){
+      try { window.__zrhMap.resize(); } catch(e) {}
+    }
+  }
+
+  function initStartNotice(){
+    var btn = document.getElementById('acceptNotice');
+    if(btn){
+      btn.addEventListener('click', closeStartNotice);
+    }
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', initStartNotice, {once:true});
+  }else{
+    initStartNotice();
+  }
+
+  function showLoadError(){
+    if(window.__zrhMapReady) return;
+
+    var prompt = document.getElementById('prompt');
+    var loadingText = document.getElementById('loadingText');
+
+    if(prompt){
+      prompt.textContent = 'Die Karte konnte nicht vollständig geladen werden.';
+    }
+    if(loadingText){
+      loadingText.className = 'loading-error';
+      loadingText.textContent = 'Die Lernkarte konnte nicht vollständig geladen werden. Bitte Seite neu laden oder einen anderen Browser verwenden.';
+    }
+  }
+
+  window.addEventListener('error', showLoadError);
+  window.addEventListener('unhandledrejection', showLoadError);
+
+  window.setTimeout(function(){
+    if(window.__zrhMapReady) return;
+    var loadingText = document.getElementById('loadingText');
+    if(loadingText){
+      loadingText.textContent = 'Die Lernkarte lädt noch … Bei langsamer Verbindung kann dies einen Moment dauern.';
+    }
+  }, 8000);
+})();
+</script>
+
+<script type="module">
+import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.2.0/dist/maplibre-gl.mjs';
+
+const AIRPORT_CENTER = [8.55294, 47.45842];
+
+const AIRPORT_PLAN_SOURCE = 'airport-plan';
+// Ausrichtung aus dem Admin übernommen:
+// X -85 m · Y -155 m · Grösse 100.00% · Drehung 0.00°
+const AIRPORT_PLAN_LAYER = 'airport-plan-layer';
+const AIRPORT_PLAN_CORNERS = [
+  [8.524170549572, 47.490827617679], // oben links
+  [8.581300549572, 47.490277617679], // oben rechts
+  [8.580110549572, 47.434967617679], // unten rechts
+  [8.523040549572, 47.435517617679]  // unten links
+];
+
+
+const AIRPORT_PLAN_BOUNDS = AIRPORT_PLAN_CORNERS.reduce(
+  (bounds, coord) => bounds.extend(coord),
+  new maplibregl.LngLatBounds(AIRPORT_PLAN_CORNERS[0], AIRPORT_PLAN_CORNERS[0])
+);
+
+// Plan beim Öffnen über die gesamte verfügbare Fensterbreite darstellen.
+// Oben/unten darf der Plan dabei angeschnitten werden – entscheidend ist,
+// dass links und rechts keine unnötigen weissen Flächen entstehen.
+function fitAirportPlan(options = {}){
+  const containerWidth = map.getContainer().clientWidth;
+  if(!containerWidth) return;
+
+  const west = AIRPORT_PLAN_BOUNDS.getWest();
+  const east = AIRPORT_PLAN_BOUNDS.getEast();
+  const longitudeSpan = (east - west) / 360;
+
+  // MapLibre verwendet standardmässig eine Weltbreite von 512 px bei Zoom 0.
+  const targetZoom = Math.log2(containerWidth / (512 * longitudeSpan));
+
+  map.easeTo({
+    center: AIRPORT_CENTER,
+    zoom: Math.min(map.getMaxZoom(), Math.max(map.getMinZoom(), targetZoom)),
+    bearing: 0,
+    pitch: 0,
+    duration: 0,
+    ...options
+  });
+}
+
+
+// Die Lernobjekte werden aus der Datei "lernobjekte.json" im gleichen GitHub-Ordner geladen.
+let OBJECTS = [];
+let appMode = 'learn'; // learn | quiz
+let quizNames = [];
+let quizOrder = [];
+let quizPos = 0;
+let quizCurrentName = '';
+let quizAnswered = false;
+let quizFirstTryCorrect = 0;
+let quizHadWrongAttempt = false;
+let quizAttempted = 0;
+
+
+const map = new maplibregl.Map({
+  container:'map',
+  style:{
+    version:8,
+    sources:{},
+    layers:[{
+      id:'background',
+      type:'background',
+      paint:{'background-color':'#ffffff'}
+    }]
+  },
+  center:AIRPORT_CENTER,
+  zoom:13.6,
+  minZoom:11,
+  maxZoom:16.5,
+  bearing:0,
+  pitch:0,
+  dragRotate:false,
+  pitchWithRotate:false,
+  attributionControl:true
+});
+
+window.__zrhMap = map;
+
+map.addControl(new maplibregl.NavigationControl({showCompass:false}), 'bottom-right');
+
+// Lernkarte bleibt immer in der Draufsicht.
+map.doubleClickZoom.disable();
+map.dragRotate.disable();
+if(map.touchZoomRotate && map.touchZoomRotate.disableRotation){
+  map.touchZoomRotate.disableRotation();
+}
+if(map.touchPitch && map.touchPitch.disable){
+  map.touchPitch.disable();
+}
+
+// Sicherheitshalber jede unerwünschte Drehung/Neigung zurücksetzen.
+map.on('rotate', ()=>{
+  if(map.getBearing() !== 0) map.setBearing(0);
+});
+map.on('pitch', ()=>{
+  if(map.getPitch() !== 0) map.setPitch(0);
+});
+
+
+const revealed = new Set();
+const items = [];
+
+const objectSourceId = 'learning-objects';
+const objectLineLayerId = 'learning-lines';
+const objectPolygonLayerId = 'learning-polygons';
+const objectPolygonOutlineLayerId = 'learning-polygons-outline';
+const closureFillLayerId = 'closure-fill';
+const closurePatternLayerId = 'closure-pattern';
+const closureOutlineLayerId = 'closure-outline';
+const closureLabelLayerId = 'closure-label';
+
+const counter = document.getElementById('counter');
+const prompt = document.getElementById('prompt');
+const quizStartBtn = document.getElementById('quizStartBtn');
+const quizBar = document.getElementById('quizBar');
+const quizKicker = document.getElementById('quizKicker');
+const quizTarget = document.getElementById('quizTarget');
+const quizMeta = document.getElementById('quizMeta');
+const quizFeedback = document.getElementById('quizFeedback');
+const quizSummary = document.getElementById('quizSummary');
+const quizNextBtn = document.getElementById('quizNextBtn');
+const quizStopBtn = document.getElementById('quizStopBtn');
+const startNotice = document.getElementById('startNotice');
+const acceptNotice = document.getElementById('acceptNotice');
+const loadingScreen = document.getElementById('loadingScreen');
+const loadingText = document.getElementById('loadingText');
+
+function learningObjectIndices(){
+  return OBJECTS.map((o,i)=>({o,i})).filter(x=>x.o.type !== 'closure').map(x=>x.i);
+}
+
+function updateCounter(){
+  const learning = learningObjectIndices();
+  const shown = learning.filter(i=>revealed.has(i)).length;
+  counter.textContent = `${shown} von ${learning.length} aufgedeckt`;
+}
+
+
+function normalizedName(name){
+  return String(name || '').trim().toLocaleUpperCase('de-CH');
+}
+
+function quizEligibleObjects(){
+  return OBJECTS.filter(o =>
+    o &&
+    o.type !== 'closure' &&
+    o.geometry &&
+    normalizedName(o.name)
+  );
+}
+
+function buildQuizNames(){
+  const grouped = new Map();
+
+  quizEligibleObjects().forEach(o=>{
+    const key = normalizedName(o.name);
+    if(!grouped.has(key)){
+      grouped.set(key, {
+        key,
+        label:String(o.name).trim(),
+        objectType:o.type || (
+          o.geometry?.type === 'Point' ? 'point' :
+          o.geometry?.type === 'LineString' ? 'line' :
+          o.geometry?.type === 'Polygon' ? 'polygon' : ''
+        )
+      });
+    }
+  });
+
+  return [...grouped.values()];
+}
+
+function shuffleArray(arr){
+  const copy = [...arr];
+  for(let i = copy.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function clearQuizHighlights(){
+  document.querySelectorAll('.quiz-hit-correct,.quiz-hit-wrong').forEach(el=>{
+    el.classList.remove('quiz-hit-correct','quiz-hit-wrong');
+  });
+
+  if(map.getLayer('quiz-correct-layer')) map.removeLayer('quiz-correct-layer');
+  if(map.getLayer('quiz-wrong-layer')) map.removeLayer('quiz-wrong-layer');
+  if(map.getSource('quiz-correct-source')) map.removeSource('quiz-correct-source');
+  if(map.getSource('quiz-wrong-source')) map.removeSource('quiz-wrong-source');
+}
+
+function addQuizShapeHighlight(obj, correct){
+  const sourceId = correct ? 'quiz-correct-source' : 'quiz-wrong-source';
+  const layerId = correct ? 'quiz-correct-layer' : 'quiz-wrong-layer';
+
+  if(map.getLayer(layerId)) map.removeLayer(layerId);
+  if(map.getSource(sourceId)) map.removeSource(sourceId);
+
+  map.addSource(sourceId,{
+    type:'geojson',
+    data:{
+      type:'Feature',
+      properties:{},
+      geometry:obj.geometry
+    }
+  });
+
+  map.addLayer({
+    id:layerId,
+    type: obj.geometry.type === 'Polygon' ? 'line' : 'line',
+    source:sourceId,
+    paint:{
+      'line-color': correct ? '#147d3f' : '#b42318',
+      'line-width': correct ? 8 : 7,
+      'line-opacity':0.95
+    }
+  });
+}
+
+function quizQuestionText(q){
+  if(q.objectType === 'point'){
+    quizKicker.textContent = 'Rollweg gesucht';
+  }else if(q.objectType === 'line'){
+    quizKicker.textContent = 'Fahrstrasse gesucht';
+  }else if(q.objectType === 'runway'){
+    quizKicker.textContent = 'Piste gesucht';
+  }else{
+    quizKicker.textContent = 'Standplatz oder Sektor gesucht';
+  }
+
+  return q.label;
+}
+
+function updateQuizMeta(){
+  quizMeta.textContent =
+    `Frage ${Math.min(quizPos + 1, quizOrder.length)} von ${quizOrder.length} · ` +
+    `${quizFirstTryCorrect} beim ersten Versuch richtig`;
+}
+
+function showQuizQuestion(){
+  clearQuizHighlights();
+  quizSummary.classList.add('hidden');
+  quizNextBtn.style.display = '';
+  quizStopBtn.textContent = 'Quiz beenden';
+
+  if(quizPos >= quizOrder.length){
+    showQuizResult('finished');
+    return;
+  }
+
+  const q = quizOrder[quizPos];
+  quizCurrentName = q.key;
+  quizAnswered = false;
+  quizHadWrongAttempt = false;
+
+  quizTarget.textContent = quizQuestionText(q);
+  quizFeedback.textContent = '';
+  quizFeedback.className = 'quiz-feedback';
+  quizNextBtn.disabled = true;
+  updateQuizMeta();
+}
+
+function showQuizResult(reason='finished'){
+  clearQuizHighlights();
+
+  const attempted = quizAttempted;
+  const firstTry = quizFirstTryCorrect;
+  const rate = attempted > 0 ? Math.round((firstTry / attempted) * 100) : 0;
+
+  quizKicker.textContent = reason === 'aborted' ? 'Quiz beendet' : 'Quiz abgeschlossen';
+  quizTarget.textContent = 'Auswertung';
+  quizMeta.textContent = '';
+  quizFeedback.textContent = '';
+  quizFeedback.className = 'quiz-feedback';
+
+  quizSummary.classList.remove('hidden');
+  const neededRetry = attempted - firstTry;
+
+  quizSummary.innerHTML = attempted > 0 ? `
+    <div class="quiz-result-grid">
+      <div class="quiz-score" aria-label="${rate} Prozent ohne Fehlversuch gelöst">
+        <div class="quiz-score-value">${rate}%</div>
+        <div class="quiz-score-label">direkt richtig</div>
+      </div>
+
+      <div class="quiz-result-main">
+        <strong>${attempted} Frage${attempted === 1 ? '' : 'n'} beantwortet</strong>
+
+        <div class="quiz-progress" aria-hidden="true">
+          <div class="quiz-progress-fill" style="width:${rate}%"></div>
+        </div>
+
+        <div class="quiz-result-note">
+          ${firstTry} direkt richtig
+          ${neededRetry > 0
+            ? ` · ${neededRetry} nach einem oder mehreren Fehlversuchen gelöst`
+            : ' · keine Fehlversuche'}
+        </div>
+      </div>
+    </div>
+  ` : `
+    <div class="quiz-result-main">
+      <strong>Noch keine Frage beantwortet.</strong>
+    </div>
+  `;
+
+  quizNextBtn.disabled = true;
+  quizNextBtn.style.display = 'none';
+  quizStopBtn.textContent = 'Zurück zum Lernmodus';
+  quizStartBtn.textContent = 'Neues Quiz starten';
+  appMode = 'result';
+}
+
+function startQuiz(){
+  const names = buildQuizNames();
+
+  if(!names.length){
+    alert('Es sind noch keine Lernobjekte für ein Quiz vorhanden.');
+    return;
+  }
+
+  appMode = 'quiz';
+  quizNames = names;
+  quizOrder = shuffleArray(names).slice(0, Math.min(20, names.length));
+  quizPos = 0;
+  quizFirstTryCorrect = 0;
+  quizAttempted = 0;
+  quizHadWrongAttempt = false;
+  quizAnswered = false;
+
+  learningObjectIndices().forEach(i=>setRevealed(i,false));
+
+  quizBar.classList.remove('hidden');
+  quizSummary.classList.add('hidden');
+  quizStartBtn.textContent = 'Quiz neu starten';
+  prompt.textContent = 'Gesuchtes Objekt auf der Karte anklicken.';
+  showQuizQuestion();
+}
+
+function stopQuiz(){
+  if(appMode === 'quiz'){
+    showQuizResult('aborted');
+    return;
+  }
+
+  appMode = 'learn';
+  clearQuizHighlights();
+  quizBar.classList.add('hidden');
+  quizSummary.classList.add('hidden');
+  quizFeedback.textContent = '';
+  quizNextBtn.disabled = true;
+  quizNextBtn.style.display = '';
+  quizStopBtn.textContent = 'Quiz beenden';
+  quizStartBtn.textContent = 'Quiz starten';
+  prompt.textContent = 'Kennst du die korrekten Bezeichnungen? Erst überlegen, dann aufdecken.';
+}
+
+function handleQuizSelection(index, visualEl=null){
+  if(appMode !== 'quiz' || quizAnswered || !quizCurrentName) return;
+
+  const obj = OBJECTS[index];
+  if(!obj || obj.type === 'closure') return;
+
+  const correct = normalizedName(obj.name) === quizCurrentName;
+
+  if(correct){
+    quizAnswered = true;
+    quizAttempted++;
+    if(!quizHadWrongAttempt) quizFirstTryCorrect++;
+
+    quizFeedback.className = 'quiz-feedback ok';
+    quizFeedback.textContent = 'Richtig';
+    quizNextBtn.disabled = false;
+    updateQuizMeta();
+
+    if(visualEl){
+      visualEl.classList.add('quiz-hit-correct');
+      setTimeout(()=>visualEl.classList.remove('quiz-hit-correct'), 1000);
+    }else if(obj.geometry && obj.geometry.type !== 'Point'){
+      addQuizShapeHighlight(obj, true);
+    }
+  }else{
+    quizHadWrongAttempt = true;
+    quizFeedback.className = 'quiz-feedback bad';
+    quizFeedback.textContent = 'Leider falsch – nochmals versuchen';
+
+    if(visualEl){
+      visualEl.classList.add('quiz-hit-wrong');
+      setTimeout(()=>visualEl.classList.remove('quiz-hit-wrong'), 850);
+    }else if(obj.geometry && obj.geometry.type !== 'Point'){
+      addQuizShapeHighlight(obj, false);
+      setTimeout(()=>{
+        if(map.getLayer('quiz-wrong-layer')) map.removeLayer('quiz-wrong-layer');
+        if(map.getSource('quiz-wrong-source')) map.removeSource('quiz-wrong-source');
+      },850);
+    }
+  }
+}
+
+
+function objectCenter(obj){
+  const g = obj.geometry;
+  if(!g) return AIRPORT_CENTER;
+
+  if(g.type === 'Point') return g.coordinates;
+
+  let coords = [];
+  if(g.type === 'LineString') coords = g.coordinates || [];
+  if(g.type === 'Polygon') coords = (g.coordinates && g.coordinates[0]) || [];
+  if(!coords.length) return AIRPORT_CENTER;
+
+  let x = 0, y = 0;
+  coords.forEach(c => { x += c[0]; y += c[1]; });
+  return [x / coords.length, y / coords.length];
+}
+
+function setRevealed(index, value){
+  const item = items[index];
+  const obj = OBJECTS[index];
+  if(!item || !obj || obj.type === 'closure') return;
+
+  if(value){
+    revealed.add(index);
+
+    if(item.el){
+      item.el.classList.add('revealed');
+    }
+
+    if(!item.popup){
+      item.popup = new maplibregl.Popup({
+        closeButton:false,
+        closeOnClick:false,
+        offset:22,
+        anchor:'bottom'
+      })
+      .setLngLat(objectCenter(obj))
+      .setHTML(`<div class="memory-label">${obj.name}</div>`)
+      .addTo(map);
+    }
+  }else{
+    revealed.delete(index);
+
+    if(item.el){
+      item.el.classList.remove('revealed');
+    }
+
+    if(item.popup){
+      item.popup.remove();
+      item.popup = null;
+    }
+  }
+
+  updateCounter();
+}
+
+function addPointMarkers(){
+  OBJECTS.forEach((obj,index)=>{
+    if(obj.type === 'closure' || obj.geometry?.type !== 'Point'){
+      items[index] = {el:null, marker:null, popup:null};
+      return;
+    }
+
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'memory-marker';
+    el.setAttribute('aria-label', `Lernpunkt ${index+1}`);
+
+    const marker = new maplibregl.Marker({element:el, anchor:'center'})
+      .setLngLat(obj.geometry.coordinates)
+      .addTo(map);
+
+    const item = {el, marker, popup:null};
+    items[index] = item;
+
+    el.addEventListener('click', (e)=>{
+      e.stopPropagation();
+
+      if(appMode === 'quiz'){
+        handleQuizSelection(index, el);
+        return;
+      }
+      if(appMode === 'result') return;
+
+      setRevealed(index, !revealed.has(index));
+    });
+  });
+}
+
+function buildGeoJson(){
+  return {
+    type:'FeatureCollection',
+    features:OBJECTS
+      .filter(o=>o.geometry && o.geometry.type !== 'Point')
+      .map((o,index)=>({
+        type:'Feature',
+        properties:{
+          id:o.id || '',
+          name:o.name || '',
+          index:OBJECTS.indexOf(o),
+          type:o.type || ''
+        },
+        geometry:o.geometry
+      }))
+  };
+}
+
+function addShapeLayers(){
+  map.addSource(objectSourceId,{
+    type:'geojson',
+    data:buildGeoJson()
+  });
+
+  // Normale Lernzonen
+  map.addLayer({
+    id:objectPolygonLayerId,
+    type:'fill',
+    source:objectSourceId,
+    filter:['all',
+      ['==',['geometry-type'],'Polygon'],
+      ['!=',['get','type'],'closure']
+    ],
+    paint:{
+      'fill-color':[
+        'case',
+        ['==',['get','type'],'runway'],'#6f4ea1',
+        '#00549f'
+      ],
+      'fill-opacity':[
+        'case',
+        ['==',['get','type'],'runway'],0.16,
+        0.18
+      ]
+    }
+  });
+
+  map.addLayer({
+    id:objectPolygonOutlineLayerId,
+    type:'line',
+    source:objectSourceId,
+    filter:['all',
+      ['==',['geometry-type'],'Polygon'],
+      ['!=',['get','type'],'closure']
+    ],
+    paint:{
+      'line-color':[
+        'case',
+        ['==',['get','type'],'runway'],'#6f4ea1',
+        '#00549f'
+      ],
+      'line-width':4
+    }
+  });
+
+  // Normale Lernlinien
+  map.addLayer({
+    id:objectLineLayerId,
+    type:'line',
+    source:objectSourceId,
+    filter:['==',['geometry-type'],'LineString'],
+    paint:{
+      'line-color':'#00549f',
+      'line-width':6
+    }
+  });
+
+  // Rote Sperrflächen / Baustellen
+  map.addLayer({
+    id:closureFillLayerId,
+    type:'fill',
+    source:objectSourceId,
+    filter:['==',['get','type'],'closure'],
+    paint:{
+      'fill-color':'#d32f2f',
+      'fill-opacity':0.22
+    }
+  });
+
+  // Diagonale Schraffur als Symbolmuster
+  const size = 24;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,size,size);
+  ctx.strokeStyle = '#c62828';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(-6, size);
+  ctx.lineTo(size, -6);
+  ctx.moveTo(6, size + 6);
+  ctx.lineTo(size + 6, 6);
+  ctx.stroke();
+
+  if(!map.hasImage('closure-hatch')){
+    map.addImage('closure-hatch', ctx.getImageData(0,0,size,size), {pixelRatio:2});
+  }
+
+  map.addLayer({
+    id:closurePatternLayerId,
+    type:'fill',
+    source:objectSourceId,
+    filter:['==',['get','type'],'closure'],
+    paint:{
+      'fill-pattern':'closure-hatch',
+      'fill-opacity':0.90
+    }
+  });
+
+  map.addLayer({
+    id:closureOutlineLayerId,
+    type:'line',
+    source:objectSourceId,
+    filter:['==',['get','type'],'closure'],
+    paint:{
+      'line-color':'#b71c1c',
+      'line-width':4
+    }
+  });
+
+  map.addLayer({
+    id:closureLabelLayerId,
+    type:'symbol',
+    source:objectSourceId,
+    filter:['==',['get','type'],'closure'],
+    layout:{
+      'text-field':['coalesce',['get','name'],'Baustelle'],
+      'text-size':15,
+      'text-font':['Noto Sans Bold'],
+      'text-allow-overlap':true,
+      'text-ignore-placement':true
+    },
+    paint:{
+      'text-color':'#b71c1c',
+      'text-halo-color':'#ffffff',
+      'text-halo-width':2
+    }
+  });
+
+  function clickShape(e){
+    const feature = e.features?.[0];
+    if(!feature) return;
+    if(feature.properties.type === 'closure') return;
+
+    const index = Number(feature.properties.index);
+    if(!Number.isInteger(index)) return;
+
+    if(appMode === 'quiz'){
+      handleQuizSelection(index, null);
+      return;
+    }
+    if(appMode === 'result') return;
+
+    setRevealed(index, !revealed.has(index));
+  }
+
+  map.on('click', objectPolygonLayerId, clickShape);
+  map.on('click', objectPolygonOutlineLayerId, clickShape);
+  map.on('click', objectLineLayerId, clickShape);
+
+  [objectPolygonLayerId, objectPolygonOutlineLayerId, objectLineLayerId].forEach(id=>{
+    map.on('mouseenter',id,()=>map.getCanvas().style.cursor='pointer');
+    map.on('mouseleave',id,()=>map.getCanvas().style.cursor='');
+  });
+}
+
+
+
+
+function addAirportPlanBase(){
+  if(map.getSource(AIRPORT_PLAN_SOURCE)) return;
+
+  map.addSource(AIRPORT_PLAN_SOURCE,{
+    type:'image',
+    url:'./Plan.jpg',
+    coordinates:AIRPORT_PLAN_CORNERS
+  });
+
+  map.addLayer({
+    id:AIRPORT_PLAN_LAYER,
+    type:'raster',
+    source:AIRPORT_PLAN_SOURCE,
+    paint:{
+      'raster-opacity':1,
+      'raster-fade-duration':0
+    }
+  });
+}
+
+async function loadObjects(){
+  const response = await fetch('./lernobjekte.json', {cache:'no-store'});
+  if(!response.ok){
+    throw new Error(`lernobjekte.json konnte nicht geladen werden (${response.status})`);
+  }
+
+  const data = await response.json();
+  OBJECTS = Array.isArray(data) ? data : (Array.isArray(data.objects) ? data.objects : []);
+
+  // Nur aktive Objekte, falls das Feld vorhanden ist.
+  OBJECTS = OBJECTS.filter(o => o.active !== false && o.geometry);
+
+  items.length = 0;
+  OBJECTS.forEach(()=>items.push({el:null,marker:null,popup:null}));
+
+  addPointMarkers();
+  addShapeLayers();
+  updateCounter();
+}
+
+
+function showOpeningNoticeWhenReady(){
+  // "idle" wird erst ausgelöst, wenn MapLibre keine offenen Lade-/Renderaufgaben mehr hat.
+  // Dadurch erscheint die Eröffnungsmeldung erst, wenn Plan und Lernobjekte im Hintergrund bereit sind.
+  const revealNotice = ()=>{
+    window.__zrhMapReady = true;
+    if(loadingScreen) loadingScreen.classList.add('hidden');
+    if(startNotice) startNotice.classList.remove('hidden');
+    document.body.classList.add('notice-open');
+    prompt.textContent = 'Kennst du die korrekten Bezeichnungen? Erst überlegen, dann aufdecken.';
+  };
+
+  if(map.loaded()){
+    map.once('idle', revealNotice);
+    // Falls die Karte bereits vollständig idle ist, sorgt triggerRepaint für einen sicheren nächsten Renderzyklus.
+    map.triggerRepaint();
+  }else{
+    map.once('idle', revealNotice);
+  }
+}
+
+function showLoadingError(err){
+  console.error(err);
+  if(loadingText){
+    loadingText.className = 'loading-error';
+    loadingText.textContent = 'Die Lernkarte konnte nicht vollständig geladen werden. Bitte Seite neu laden oder einen anderen Browser verwenden.';
+  }
+  prompt.textContent = 'Die Karte konnte nicht vollständig geladen werden.';
+  counter.textContent = '0 Objekte';
+}
+
+map.on('load', async ()=>{
+  try{
+    addAirportPlanBase();
+    await loadObjects();
+
+    // Beim Öffnen den Flughafenplan so zoomen, dass er die verfügbare Fensterbreite ausfüllt.
+    map.resize();
+    fitAirportPlan();
+
+    showOpeningNoticeWhenReady();
+  }catch(err){
+    showLoadingError(err);
+  }
+});
+
+
+if(quizStartBtn){
+  quizStartBtn.addEventListener('click', startQuiz);
+}
+
+if(quizNextBtn){
+  quizNextBtn.addEventListener('click', ()=>{
+    if(!quizAnswered) return;
+    quizPos++;
+    showQuizQuestion();
+  });
+}
+
+if(quizStopBtn){
+  quizStopBtn.addEventListener('click', stopQuiz);
+}
+
+
+document.getElementById('fitBtn').addEventListener('click', ()=>{
+  fitAirportPlan({duration:500});
+});
+
+
+
+document.getElementById('hideAll').addEventListener('click', ()=>{
+  if(appMode !== 'learn') return;
+  learningObjectIndices().forEach(i=>setRevealed(i,false));
+});
+
+document.getElementById('showAll').addEventListener('click', ()=>{
+  if(appMode !== 'learn') return;
+  learningObjectIndices().forEach(i=>setRevealed(i,true));
+});
+
+</script>
+</body>
+</html>
