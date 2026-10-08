@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-03T08:40:21.251Z",
+  "generatedAt": "2026-10-08T09:28:40.581Z",
   "objects": [
     {
       "id": "d3c5c2bb-2e1f-45bc-92de-fdb4be5e33c5",
@@ -5151,6 +5151,45 @@
           ]
         ],
         "type": "Polygon"
+      },
+      "note": ""
+    },
+    {
+      "id": "78346584-b76d-4bcd-9df8-fa2afdbe065c",
+      "name": "H1",
+      "type": "point",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          8.556638101209614,
+          47.46447917859953
+        ]
+      },
+      "note": ""
+    },
+    {
+      "id": "be39f3e7-3fd9-4862-ac93-394cc2d6fe99",
+      "name": "H2",
+      "type": "point",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          8.559083735927658,
+          47.46330521530521
+        ]
+      },
+      "note": ""
+    },
+    {
+      "id": "21b1d975-0bc9-43b8-be46-d508f4590d6b",
+      "name": "H3",
+      "type": "point",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          8.562727755846794,
+          47.46037662973629
+        ]
       },
       "note": ""
     }
